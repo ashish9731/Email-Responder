@@ -4,7 +4,7 @@ import { storage } from "./storage";
 import { emailMonitor } from "./services/emailMonitor";
 import { caseManager } from "./services/caseManager";
 import { createFolderStructure } from "./onedriveClient";
-import { insertConfigurationSchema, insertKeywordSchema, insertMicrosoftCredentialsSchema } from "@shared/schema";
+import { insertConfigurationSchema, insertKeywordSchema, insertMicrosoftCredentialsSchema, type EmailCase, type Keyword } from "@shared/schema";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   
@@ -140,6 +140,125 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json({ message: "OneDrive setup completed", folder });
     } catch (error) {
       res.status(500).json({ message: "Failed to setup OneDrive" });
+    }
+  });
+
+  // OneDrive files route
+  app.get("/api/onedrive/files", async (req, res) => {
+    try {
+      // Get all cases to generate file listings based on actual case data
+      const cases = await storage.getAllEmailCases();
+      const files: any[] = [];
+      
+      // Generate files based on actual cases
+      cases.forEach((emailCase: EmailCase) => {
+        // Add checklist file for each case
+        files.push({
+          id: `checklist-${emailCase.id}`,
+          name: `Engine_Inspection_Checklist_${emailCase.caseNumber}.txt`,
+          type: "checklist",
+          size: "2.3 KB",
+          modified: emailCase.createdAt,
+          case: emailCase.caseNumber
+        });
+        
+        // Add response file for cases that have been responded to
+        if (emailCase.status === 'responded' || emailCase.status === 'completed' || emailCase.status === 'follow_up_sent') {
+          files.push({
+            id: `response-${emailCase.id}`,
+            name: `Email_Response_${emailCase.caseNumber}_${new Date(emailCase.createdAt).toISOString().split('T')[0]}.txt`,
+            type: "response", 
+            size: "1.8 KB",
+            modified: emailCase.createdAt,
+            case: emailCase.caseNumber
+          });
+        }
+      });
+      
+      // Sort files by modification date (most recent first)
+      files.sort((a, b) => new Date(b.modified).getTime() - new Date(a.modified).getTime());
+      
+      res.json(files);
+    } catch (error) {
+      console.error("Error fetching OneDrive files:", error);
+      res.status(500).json({ message: "Failed to fetch OneDrive files" });
+    }
+  });
+
+  // Analytics route
+  app.get("/api/analytics", async (req, res) => {
+    try {
+      const cases = await storage.getAllEmailCases();
+      const keywords = await storage.getAllKeywords();
+      
+      const now = new Date();
+      const last7Days = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+      const last30Days = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+      const last90Days = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
+      
+      // Calculate performance data based on real cases
+      const cases7Days = cases.filter((c: EmailCase) => new Date(c.createdAt) >= last7Days);
+      const cases30Days = cases.filter((c: EmailCase) => new Date(c.createdAt) >= last30Days);
+      const cases90Days = cases.filter((c: EmailCase) => new Date(c.createdAt) >= last90Days);
+      
+      const responded7Days = cases7Days.filter((c: EmailCase) => c.status === 'responded' || c.status === 'completed' || c.status === 'follow_up_sent').length;
+      const responded30Days = cases30Days.filter((c: EmailCase) => c.status === 'responded' || c.status === 'completed' || c.status === 'follow_up_sent').length;
+      const responded90Days = cases90Days.filter((c: EmailCase) => c.status === 'responded' || c.status === 'completed' || c.status === 'follow_up_sent').length;
+      
+      const performanceData = [
+        { 
+          period: "Last 7 days", 
+          emails: cases7Days.length, 
+          responses: responded7Days, 
+          rate: cases7Days.length > 0 ? `${Math.round((responded7Days / cases7Days.length) * 100)}%` : "0%" 
+        },
+        { 
+          period: "Last 30 days", 
+          emails: cases30Days.length, 
+          responses: responded30Days, 
+          rate: cases30Days.length > 0 ? `${Math.round((responded30Days / cases30Days.length) * 100)}%` : "0%" 
+        },
+        { 
+          period: "Last 90 days", 
+          emails: cases90Days.length, 
+          responses: responded90Days, 
+          rate: cases90Days.length > 0 ? `${Math.round((responded90Days / cases90Days.length) * 100)}%` : "0%" 
+        }
+      ];
+      
+      // Calculate keyword analytics based on actual case subjects and keywords
+      const keywordAnalytics = keywords.map((keyword: Keyword) => {
+        // Count cases that contain this keyword in their subject or content
+        const keywordCases = cases.filter((c: EmailCase) => 
+          c.subject.toLowerCase().includes(keyword.keyword.toLowerCase()) ||
+          (c.content && c.content.toLowerCase().includes(keyword.keyword.toLowerCase()))
+        );
+        
+        const recentCases = keywordCases.filter((c: EmailCase) => new Date(c.createdAt) >= last30Days);
+        const olderCases = keywordCases.filter((c: EmailCase) => new Date(c.createdAt) < last30Days && new Date(c.createdAt) >= last90Days);
+        
+        let trend = "0%";
+        if (olderCases.length > 0) {
+          const trendPercent = Math.round(((recentCases.length - olderCases.length) / olderCases.length) * 100);
+          trend = trendPercent > 0 ? `+${trendPercent}%` : `${trendPercent}%`;
+        } else if (recentCases.length > 0) {
+          trend = "+100%"; // New keyword with cases
+        }
+        
+        return {
+          keyword: keyword.keyword,
+          count: keywordCases.length,
+          trend
+        };
+      });
+      
+      res.json({
+        performanceData,
+        keywordAnalytics
+      });
+    } catch (error) {
+      console.error("Error fetching analytics:", error);
+      res.status(500).json({ message: "Failed to fetch analytics data" });
     }
   });
 

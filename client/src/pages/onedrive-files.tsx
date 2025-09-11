@@ -30,33 +30,10 @@ export default function OneDriveFiles() {
     },
   });
 
-  // Mock file data - in a real app this would come from OneDrive API
-  const mockFiles = [
-    {
-      id: "1",
-      name: "Engine_Inspection_Checklist_VE-2024-001.txt",
-      type: "checklist",
-      size: "2.3 KB",
-      modified: "2024-01-15T10:30:00Z",
-      case: "VE-2024-001"
-    },
-    {
-      id: "2", 
-      name: "Email_Response_VE-2024-001_2024-01-15.txt",
-      type: "response",
-      size: "1.8 KB", 
-      modified: "2024-01-15T10:35:00Z",
-      case: "VE-2024-001"
-    },
-    {
-      id: "3",
-      name: "Engine_Inspection_Checklist_VE-2024-002.txt", 
-      type: "checklist",
-      size: "2.1 KB",
-      modified: "2024-01-16T14:20:00Z",
-      case: "VE-2024-002"
-    }
-  ];
+  // Fetch OneDrive files data from API
+  const { data: files = [], isLoading: isLoadingFiles, refetch } = useQuery({
+    queryKey: ["/api/onedrive/files"],
+  }) as { data: any[], isLoading: boolean, refetch: () => void };
 
   const formatFileSize = (bytes: string) => bytes;
 
@@ -147,7 +124,7 @@ export default function OneDriveFiles() {
                 <FileText className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">{mockFiles.length}</div>
+                <div className="text-2xl font-bold">{isLoadingFiles ? "..." : files.length}</div>
                 <p className="text-xs text-muted-foreground">
                   Stored in OneDrive
                 </p>
@@ -160,7 +137,7 @@ export default function OneDriveFiles() {
                 <FolderOpen className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">{mockFiles.filter(f => f.type === 'checklist').length}</div>
+                <div className="text-2xl font-bold">{isLoadingFiles ? "..." : files.filter(f => f.type === 'checklist').length}</div>
                 <p className="text-xs text-muted-foreground">
                   Inspection checklists
                 </p>
@@ -173,7 +150,7 @@ export default function OneDriveFiles() {
                 <FileText className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">{mockFiles.filter(f => f.type === 'response').length}</div>
+                <div className="text-2xl font-bold">{isLoadingFiles ? "..." : files.filter(f => f.type === 'response').length}</div>
                 <p className="text-xs text-muted-foreground">
                   Email responses
                 </p>
@@ -189,7 +166,7 @@ export default function OneDriveFiles() {
                   <CardTitle>Recent Files</CardTitle>
                   <p className="text-sm text-muted-foreground">Checklists and responses from email cases</p>
                 </div>
-                <Button variant="outline" size="sm">
+                <Button variant="outline" size="sm" onClick={() => refetch()}>
                   <RefreshCw className="h-4 w-4 mr-2" />
                   Refresh
                 </Button>
@@ -197,14 +174,19 @@ export default function OneDriveFiles() {
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
-                {mockFiles.length === 0 ? (
+                {isLoadingFiles ? (
+                  <div className="text-center py-12">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+                    <p className="text-muted-foreground">Loading files...</p>
+                  </div>
+                ) : files.length === 0 ? (
                   <div className="text-center py-12">
                     <Cloud className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
                     <p className="text-muted-foreground">No files found</p>
                     <p className="text-sm text-muted-foreground">Files will appear here when cases are processed</p>
                   </div>
                 ) : (
-                  mockFiles.map((file) => (
+                  files.map((file) => (
                     <div 
                       key={file.id} 
                       className="flex items-center justify-between p-4 border border-border rounded-lg hover:bg-accent/50 transition-colors"

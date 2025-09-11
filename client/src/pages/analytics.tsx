@@ -14,25 +14,20 @@ export default function Analytics() {
     queryKey: ["/api/cases"],
   }) as { data: any[] };
 
+  // Fetch analytics data from API
+  const { data: analyticsData, isLoading: isLoadingAnalytics } = useQuery({
+    queryKey: ["/api/analytics"],
+  }) as { data: any, isLoading: boolean };
+
   // Calculate analytics
   const totalCases = cases.length;
   const activeCases = cases.filter(c => c.status !== 'completed').length;
   const completedCases = cases.filter(c => c.status === 'completed').length;
   const responseRate = totalCases > 0 ? Math.round((completedCases / totalCases) * 100) : 0;
   
-  // Mock performance data - in a real app this would come from database analytics
-  const performanceData = [
-    { period: "Last 7 days", emails: 23, responses: 21, rate: "91%" },
-    { period: "Last 30 days", emails: 89, responses: 84, rate: "94%" },
-    { period: "Last 90 days", emails: 267, responses: 249, rate: "93%" },
-  ];
-
-  const keywordAnalytics = [
-    { keyword: "engine failure", count: 12, trend: "+15%" },
-    { keyword: "engine malfunction", count: 8, trend: "+5%" },
-    { keyword: "engine fire", count: 3, trend: "-2%" },
-    { keyword: "engine damaged", count: 7, trend: "+10%" },
-  ];
+  // Use real performance data from API
+  const performanceData = analyticsData?.performanceData || [];
+  const keywordAnalytics = analyticsData?.keywordAnalytics || [];
 
   const formatUptime = (seconds: number) => {
     const hours = Math.floor(seconds / 3600);
@@ -125,18 +120,30 @@ export default function Analytics() {
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
-                  {performanceData.map((data, index) => (
-                    <div key={index} className="flex items-center justify-between p-4 bg-muted rounded-lg">
-                      <div>
-                        <p className="font-medium">{data.period}</p>
-                        <p className="text-sm text-muted-foreground">{data.emails} emails processed</p>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-2xl font-bold">{data.rate}</p>
-                        <p className="text-sm text-muted-foreground">{data.responses} responses</p>
-                      </div>
+                  {isLoadingAnalytics ? (
+                    <div className="text-center py-8">
+                      <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary mx-auto mb-4"></div>
+                      <p className="text-sm text-muted-foreground">Loading analytics...</p>
                     </div>
-                  ))}
+                  ) : performanceData.length === 0 ? (
+                    <div className="text-center py-8">
+                      <p className="text-muted-foreground">No performance data available</p>
+                      <p className="text-sm text-muted-foreground">Data will appear when cases are processed</p>
+                    </div>
+                  ) : (
+                    performanceData.map((data: any, index: number) => (
+                      <div key={index} className="flex items-center justify-between p-4 bg-muted rounded-lg">
+                        <div>
+                          <p className="font-medium">{data.period}</p>
+                          <p className="text-sm text-muted-foreground">{data.emails} emails processed</p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-2xl font-bold">{data.rate}</p>
+                          <p className="text-sm text-muted-foreground">{data.responses} responses</p>
+                        </div>
+                      </div>
+                    ))
+                  )}
                 </div>
               </CardContent>
             </Card>
@@ -148,19 +155,31 @@ export default function Analytics() {
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
-                  {keywordAnalytics.map((keyword, index) => (
-                    <div key={index} className="flex items-center justify-between p-4 bg-muted rounded-lg">
-                      <div>
-                        <p className="font-medium">{keyword.keyword}</p>
-                        <p className="text-sm text-muted-foreground">{keyword.count} triggers</p>
-                      </div>
-                      <div className="text-right">
-                        <span className={`text-sm font-medium ${keyword.trend.startsWith('+') ? 'text-green-600' : 'text-red-600'}`}>
-                          {keyword.trend}
-                        </span>
-                      </div>
+                  {isLoadingAnalytics ? (
+                    <div className="text-center py-8">
+                      <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary mx-auto mb-4"></div>
+                      <p className="text-sm text-muted-foreground">Loading keyword analytics...</p>
                     </div>
-                  ))}
+                  ) : keywordAnalytics.length === 0 ? (
+                    <div className="text-center py-8">
+                      <p className="text-muted-foreground">No keyword data available</p>
+                      <p className="text-sm text-muted-foreground">Data will appear when keywords are triggered</p>
+                    </div>
+                  ) : (
+                    keywordAnalytics.map((keyword: any, index: number) => (
+                      <div key={index} className="flex items-center justify-between p-4 bg-muted rounded-lg">
+                        <div>
+                          <p className="font-medium">{keyword.keyword}</p>
+                          <p className="text-sm text-muted-foreground">{keyword.count} triggers</p>
+                        </div>
+                        <div className="text-right">
+                          <span className={`text-sm font-medium ${keyword.trend.startsWith('+') ? 'text-green-600' : keyword.trend.startsWith('-') ? 'text-red-600' : 'text-muted-foreground'}`}>
+                            {keyword.trend}
+                          </span>
+                        </div>
+                      </div>
+                    ))
+                  )}
                 </div>
               </CardContent>
             </Card>
