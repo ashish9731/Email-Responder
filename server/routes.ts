@@ -3,8 +3,14 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { emailMonitor } from "./services/emailMonitor";
 import { caseManager } from "./services/caseManager";
-import { createFolderStructure } from "./onedriveClient";
+import { createFolderStructure, getUncachableOneDriveClient } from "./onedriveClient";
+import { getAuthCodeUrl, acquireTokenByCode, pca } from "./msal";
 import { insertConfigurationSchema, insertKeywordSchema, insertMicrosoftCredentialsSchema, type EmailCase, type Keyword } from "@shared/schema";
+
+// Define scopes for Microsoft Graph API
+const OUTLOOK_SCOPES = ["User.Read", "Mail.ReadWrite", "Mail.Send"];
+const ONEDRIVE_SCOPES = ["User.Read", "Files.ReadWrite.All"];
+const REDIRECT_URI = "http://localhost:5001/integration/auth/callback";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   
@@ -72,6 +78,50 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.get("/api/me", (req, res) => {
+    // @ts-ignore
+    res.json(req.session.account || null);
+  });
+
+  app.patch("/api/me", (req, res) => {
+    const { name, profilePictureUrl } = req.body;
+    // @ts-ignore
+    if (req.session.account) {
+      // @ts-ignore
+      req.session.account.name = name;
+      // @ts-ignore
+      req.session.account.profilePictureUrl = profilePictureUrl;
+      // @ts-ignore
+      res.json(req.session.account);
+    } else {
+      res.status(401).json({ message: "Unauthorized" });
+    }
+  });
+
+  app.post("/api/me/profile-picture", (req, res) => {
+    const { base64Image } = req.body;
+    // @ts-ignore
+    if (req.session.account && base64Image) {
+      // @ts-ignore
+      req.session.account.profilePictureUrl = base64Image;
+      // @ts-ignore
+      res.json({ profilePictureUrl: req.session.account.profilePictureUrl });
+    } else {
+      res.status(400).json({ message: "Invalid request" });
+    }
+  });
+
+  app.delete("/api/me/profile-picture", (req, res) => {
+    // @ts-ignore
+    if (req.session.account) {
+      // @ts-ignore
+      req.session.account.profilePictureUrl = null;
+      res.json({ message: "Profile picture deleted" });
+    } else {
+      res.status(401).json({ message: "Unauthorized" });
+    }
+  });
+
   // Email cases routes
   app.get("/api/cases", async (req, res) => {
     try {
@@ -135,7 +185,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // OneDrive setup route
   app.post("/api/onedrive/setup", async (req, res) => {
     try {
-      const folder = await createFolderStructure();
+        // @ts-ignore
+        const accessToken = req.session.accessToken;
+        if (!accessToken) {
+            return res.status(401).json({ message: "Unauthorized" });
+        }
+      const folder = await createFolderStructure(accessToken);
       await storage.updateSystemStatus({ onedriveConnected: true });
       res.json({ message: "OneDrive setup completed", folder });
     } catch (error) {
@@ -146,38 +201,59 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // OneDrive files route
   app.get("/api/onedrive/files", async (req, res) => {
     try {
-      // Get all cases to generate file listings based on actual case data
-      const cases = await storage.getAllEmailCases();
-      const files: any[] = [];
-      
-      // Generate files based on actual cases
-      cases.forEach((emailCase: EmailCase) => {
-        // Add checklist file for each case
-        files.push({
-          id: `checklist-${emailCase.id}`,
-          name: `Engine_Inspection_Checklist_${emailCase.caseNumber}.txt`,
-          type: "checklist",
-          size: "2.3 KB",
-          modified: emailCase.createdAt,
-          case: emailCase.caseNumber
+      // @ts-ignore
+      let accessToken = req.session.accessToken;
+
+      if (!accessToken) {
+        const credentials = await storage.getMicrosoftCredentials();
+        if (!credentials || !credentials.tokenCache) {
+          return res.status(401).json({ message: "Unauthorized" });
+        }
+        pca.getTokenCache().deserialize(credentials.tokenCache);
+        const accounts = await pca.getTokenCache().getAllAccounts();
+        if (accounts.length === 0) {
+          return res.status(401).json({ message: "Unauthorized" });
+        }
+        const account = accounts[0];
+        const response = await pca.acquireTokenSilent({
+          account,
+          scopes: ONEDRIVE_SCOPES,
         });
-        
-        // Add response file for cases that have been responded to
-        if (emailCase.status === 'responded' || emailCase.status === 'completed' || emailCase.status === 'follow_up_sent') {
+        if (!response || !response.accessToken) {
+          return res.status(401).json({ message: "Unauthorized" });
+        }
+        accessToken = response.accessToken;
+      }
+
+      const client = getUncachableOneDriveClient(accessToken);
+      const rootFolder = await client.api("/me/drive/root/children").get();
+      const mainFolder = rootFolder.value.find((folder: any) => folder.name === "AutoRespondMail");
+      if (!mainFolder) {
+        return res.json([]);
+      }
+      const documentsFolder = await client.api(`/me/drive/items/${mainFolder.id}/children`).get();
+      const emailResponsesFolder = documentsFolder.value.find((folder: any) => folder.name === "Email Responses");
+      if (!emailResponsesFolder) {
+        return res.json([]);
+      }
+
+      const caseFolders = await client.api(`/me/drive/items/${emailResponsesFolder.id}/children`).get();
+      
+      const files = [];
+      for (const caseFolder of caseFolders.value) {
+        const caseFiles = await client.api(`/me/drive/items/${caseFolder.id}/children`).get();
+        for (const file of caseFiles.value) {
           files.push({
-            id: `response-${emailCase.id}`,
-            name: `Email_Response_${emailCase.caseNumber}_${new Date(emailCase.createdAt).toISOString().split('T')[0]}.txt`,
-            type: "response", 
-            size: "1.8 KB",
-            modified: emailCase.createdAt,
-            case: emailCase.caseNumber
+            id: file.id,
+            name: file.name,
+            type: "response",
+            size: file.size,
+            modified: file.lastModifiedDateTime ? new Date(file.lastModifiedDateTime) : new Date(),
+            case: caseFolder.name,
           });
         }
-      });
-      
-      // Sort files by modification date (most recent first)
-      files.sort((a, b) => new Date(b.modified).getTime() - new Date(a.modified).getTime());
-      
+      }
+
       res.json(files);
     } catch (error) {
       console.error("Error fetching OneDrive files:", error);
@@ -197,9 +273,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const last90Days = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
       
       // Calculate performance data based on real cases
-      const cases7Days = cases.filter((c: EmailCase) => new Date(c.createdAt) >= last7Days);
-      const cases30Days = cases.filter((c: EmailCase) => new Date(c.createdAt) >= last30Days);
-      const cases90Days = cases.filter((c: EmailCase) => new Date(c.createdAt) >= last90Days);
+      const cases7Days = cases.filter((c: EmailCase) => c.createdAt && new Date(c.createdAt) >= last7Days);
+      const cases30Days = cases.filter((c: EmailCase) => c.createdAt && new Date(c.createdAt) >= last30Days);
+      const cases90Days = cases.filter((c: EmailCase) => c.createdAt && new Date(c.createdAt) >= last90Days);
       
       const responded7Days = cases7Days.filter((c: EmailCase) => c.status === 'responded' || c.status === 'completed' || c.status === 'follow_up_sent').length;
       const responded30Days = cases30Days.filter((c: EmailCase) => c.status === 'responded' || c.status === 'completed' || c.status === 'follow_up_sent').length;
@@ -231,7 +307,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Count cases that contain this keyword in their subject or content
         const keywordCases = cases.filter((c: EmailCase) => 
           c.subject.toLowerCase().includes(keyword.keyword.toLowerCase()) ||
-          (c.content && c.content.toLowerCase().includes(keyword.keyword.toLowerCase()))
+          (c.originalBody && c.originalBody.toLowerCase().includes(keyword.keyword.toLowerCase()))
         );
         
         const recentCases = keywordCases.filter((c: EmailCase) => new Date(c.createdAt) >= last30Days);
@@ -279,60 +355,57 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Microsoft integration routes - Use Replit integration system
+  // Microsoft integration routes
   app.get("/integration/outlook", async (req, res) => {
     try {
-      // Show integration setup page with instructions
-      res.send(`
-        <html>
-          <head><title>Connect Outlook</title></head>
-          <body style="font-family: Arial, sans-serif; max-width: 600px; margin: 50px auto; padding: 20px;">
-            <h2>🔗 Connect Your Outlook Account</h2>
-            <p>To enable automatic email sending through Outlook:</p>
-            <ol>
-              <li>Go to your <a href="/integrations" target="_blank">Replit Integrations page</a></li>
-              <li>Search for "Outlook" in the integrations</li>
-              <li>Click "Connect" and authorize access</li>
-              <li>Return to your <a href="/">Email Responder Dashboard</a></li>
-            </ol>
-            <div style="background: #f0f8ff; padding: 15px; border-radius: 8px; margin: 20px 0;">
-              <strong>💡 Alternative:</strong> Use the manual setup option in your dashboard by entering your Microsoft credentials directly.
-            </div>
-            <a href="/" style="background: #007acc; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">← Back to Dashboard</a>
-          </body>
-        </html>
-      `);
+      const url = await getAuthCodeUrl(OUTLOOK_SCOPES, REDIRECT_URI);
+      res.redirect(url);
     } catch (error) {
-      res.status(500).json({ message: "Failed to show Outlook integration page" });
+      console.error("Failed to get auth code url", error);
+      res.status(500).json({ message: "Failed to get auth code url" });
     }
   });
 
   app.get("/integration/onedrive", async (req, res) => {
     try {
-      // Show integration setup page with instructions
-      res.send(`
-        <html>
-          <head><title>Connect OneDrive</title></head>
-          <body style="font-family: Arial, sans-serif; max-width: 600px; margin: 50px auto; padding: 20px;">
-            <h2>☁️ Connect Your OneDrive Account</h2>
-            <p>To enable automatic file storage in OneDrive:</p>
-            <ol>
-              <li>Go to your <a href="/integrations" target="_blank">Replit Integrations page</a></li>
-              <li>Search for "OneDrive" in the integrations</li>
-              <li>Click "Connect" and authorize access</li>
-              <li>Return to your <a href="/">Email Responder Dashboard</a></li>
-            </ol>
-            <div style="background: #f0f8ff; padding: 15px; border-radius: 8px; margin: 20px 0;">
-              <strong>💡 Alternative:</strong> Use the manual setup option in your dashboard by entering your Microsoft credentials directly.
-            </div>
-            <a href="/" style="background: #007acc; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">← Back to Dashboard</a>
-          </body>
-        </html>
-      `);
+      const url = await getAuthCodeUrl(ONEDRIVE_SCOPES, REDIRECT_URI);
+      res.redirect(url);
     } catch (error) {
-      res.status(500).json({ message: "Failed to show OneDrive integration page" });
+      console.error("Failed to get auth code url", error);
+      res.status(500).json({ message: "Failed to get auth code url" });
     }
   });
+
+  app.get("/integration/auth/callback", async (req, res) => {
+    const { code } = req.query;
+    if (typeof code !== "string") {
+      res.status(400).json({ message: "Invalid code" });
+      return;
+    }
+    try {
+      const response = await acquireTokenByCode(OUTLOOK_SCOPES.concat(ONEDRIVE_SCOPES), REDIRECT_URI, code);
+      // @ts-ignore
+      req.session.accessToken = response.accessToken;
+      // @ts-ignore
+      req.session.account = response.account;
+
+      const tokenCache = pca.getTokenCache().serialize();
+      const credentials = await storage.getMicrosoftCredentials();
+      if (credentials) {
+        await storage.updateMicrosoftCredentials({ ...credentials, tokenCache });
+      } else {
+        // This should not happen, as the user should have saved the credentials by now
+      }
+
+      await storage.updateSystemStatus({ outlookConnected: true, onedriveConnected: true });
+
+      res.redirect("/configuration");
+    } catch (error) {
+      console.error("Failed to acquire token", error);
+      res.status(500).json({ message: "Failed to acquire token" });
+    }
+  });
+
 
   // Manual Microsoft credentials route
   app.post("/api/microsoft/manual", async (req, res) => {
@@ -412,3 +485,4 @@ export async function registerRoutes(app: Express): Promise<Server> {
   const httpServer = createServer(app);
   return httpServer;
 }
+
