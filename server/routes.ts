@@ -4,7 +4,7 @@ import { storage } from "./storage";
 import { emailMonitor } from "./services/emailMonitor";
 import { caseManager } from "./services/caseManager";
 import { createFolderStructure, getUncachableOneDriveClient } from "./onedriveClient";
-import { getAuthCodeUrl, acquireTokenByCode, pca } from "./msal";
+import * as msalModule from "./msal";
 import { insertConfigurationSchema, insertKeywordSchema, insertMicrosoftCredentialsSchema, type EmailCase, type Keyword } from "@shared/schema";
 
 // Define scopes for Microsoft Graph API
@@ -190,7 +190,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         if (!accessToken) {
             return res.status(401).json({ message: "Unauthorized" });
         }
-      const folder = await createFolderStructure(accessToken);
+      const folder = await (createFolderStructure as (accessToken: string) => Promise<any>)(accessToken);
       await storage.updateSystemStatus({ onedriveConnected: true });
       res.json({ message: "OneDrive setup completed", folder });
     } catch (error) {
@@ -209,13 +209,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         if (!credentials || !credentials.tokenCache) {
           return res.status(401).json({ message: "Unauthorized" });
         }
-        pca.getTokenCache().deserialize(credentials.tokenCache);
-        const accounts = await pca.getTokenCache().getAllAccounts();
+        msalModule.pca.getTokenCache().deserialize(credentials.tokenCache);
+        const accounts = await msalModule.pca.getTokenCache().getAllAccounts();
         if (accounts.length === 0) {
           return res.status(401).json({ message: "Unauthorized" });
         }
         const account = accounts[0];
-        const response = await pca.acquireTokenSilent({
+        const response = await msalModule.pca.acquireTokenSilent({
           account,
           scopes: ONEDRIVE_SCOPES,
         });
@@ -225,7 +225,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         accessToken = response.accessToken;
       }
 
-      const client = getUncachableOneDriveClient(accessToken);
+      const client = await (getUncachableOneDriveClient as (accessToken: string) => any)(accessToken);
       const rootFolder = await client.api("/me/drive/root/children").get();
       const mainFolder = rootFolder.value.find((folder: any) => folder.name === "AutoRespondMail");
       if (!mainFolder) {
@@ -310,8 +310,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           (c.originalBody && c.originalBody.toLowerCase().includes(keyword.keyword.toLowerCase()))
         );
         
-        const recentCases = keywordCases.filter((c: EmailCase) => new Date(c.createdAt) >= last30Days);
-        const olderCases = keywordCases.filter((c: EmailCase) => new Date(c.createdAt) < last30Days && new Date(c.createdAt) >= last90Days);
+        const recentCases = keywordCases.filter((c: EmailCase) => c.createdAt && new Date(c.createdAt) >= last30Days);
+        const olderCases = keywordCases.filter((c: EmailCase) => c.createdAt && new Date(c.createdAt) < last30Days && c.createdAt && new Date(c.createdAt) >= last90Days);
         
         let trend = "0%";
         if (olderCases.length > 0) {
@@ -358,7 +358,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Microsoft integration routes
   app.get("/integration/outlook", async (req, res) => {
     try {
-      const url = await getAuthCodeUrl(OUTLOOK_SCOPES, REDIRECT_URI);
+      const url = await msalModule.getAuthCodeUrl(OUTLOOK_SCOPES, REDIRECT_URI);
       res.redirect(url);
     } catch (error) {
       console.error("Failed to get auth code url", error);
@@ -368,7 +368,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/integration/onedrive", async (req, res) => {
     try {
-      const url = await getAuthCodeUrl(ONEDRIVE_SCOPES, REDIRECT_URI);
+      const url = await msalModule.getAuthCodeUrl(ONEDRIVE_SCOPES, REDIRECT_URI);
       res.redirect(url);
     } catch (error) {
       console.error("Failed to get auth code url", error);
@@ -383,13 +383,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return;
     }
     try {
-      const response = await acquireTokenByCode(OUTLOOK_SCOPES.concat(ONEDRIVE_SCOPES), REDIRECT_URI, code);
+      const response = await msalModule.acquireTokenByCode(OUTLOOK_SCOPES.concat(ONEDRIVE_SCOPES), REDIRECT_URI, code);
       // @ts-ignore
       req.session.accessToken = response.accessToken;
       // @ts-ignore
       req.session.account = response.account;
 
-      const tokenCache = pca.getTokenCache().serialize();
+      const tokenCache = msalModule.pca.getTokenCache().serialize();
       const credentials = await storage.getMicrosoftCredentials();
       if (credentials) {
         await storage.updateMicrosoftCredentials({ ...credentials, tokenCache });

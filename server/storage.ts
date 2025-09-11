@@ -53,22 +53,6 @@ export class MemStorage implements IStorage {
   private currentMsCredId: string | null = null;
 
   constructor() {
-    // Initialize with default keywords
-    const defaultKeywords = [
-      "engine failure", "engine damaged", "engine fire", "engine broken", 
-      "engine rusted", "engine malfunction", "engine issues", "vessel engine"
-    ];
-    
-    defaultKeywords.forEach(kw => {
-      const id = randomUUID();
-      this.keywords.set(id, {
-        id,
-        keyword: kw,
-        isActive: true,
-        createdAt: new Date(),
-      });
-    });
-
     // Initialize system status
     const statusId = randomUUID();
     this.currentStatusId = statusId;
@@ -136,6 +120,7 @@ export class MemStorage implements IStorage {
       ...emailCase,
       id,
       caseNumber,
+      senderName: emailCase.senderName || null,
       responseBody: emailCase.responseBody || null,
       attachmentUrl: emailCase.attachmentUrl || null,
       followUpSent: emailCase.followUpSent || false,
@@ -230,6 +215,7 @@ export class MemStorage implements IStorage {
     const microsoftCreds: MicrosoftCredentials = {
       ...credentials,
       id,
+      tokenCache: (credentials.tokenCache || null) as string | null,
       isActive: credentials.isActive !== undefined ? credentials.isActive : true,
       createdAt: new Date(),
       updatedAt: new Date(),
@@ -250,7 +236,7 @@ export class MemStorage implements IStorage {
       throw new Error("Microsoft credentials not found");
     }
     
-    const updated = { ...existing, ...credentials, updatedAt: new Date() };
+    const updated = { ...existing, ...credentials, tokenCache: credentials.tokenCache || existing.tokenCache, updatedAt: new Date() };
     this.microsoftCredentials.set(this.currentMsCredId, updated);
     return updated;
   }

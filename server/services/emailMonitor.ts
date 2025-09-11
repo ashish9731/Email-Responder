@@ -1,7 +1,8 @@
 import * as Imap from 'node-imap';
 import { storage } from '../storage';
 import { aiResponder } from './aiResponder';
-import { pca } from '../msal';
+import * as msalModule from '../msal';
+import { caseManager } from './caseManager';
 
 export class EmailMonitor {
   private imap: Imap | null = null;
@@ -60,7 +61,7 @@ export class EmailMonitor {
   private openInbox() {
     if (!this.imap) return;
 
-    this.imap.openBox('INBOX', false, (err, box) => {
+    this.imap.openBox('INBOX', false, (err: Error, box: Imap.Box) => {
       if (err) {
         console.error('Error opening inbox:', err);
         return;
@@ -82,7 +83,7 @@ export class EmailMonitor {
       if (!this.imap) return;
 
       // Search for unread emails
-      this.imap.search(['UNSEEN'], async (err, results) => {
+      this.imap.search(['UNSEEN'], async (err: Error, results: string[]) => {
         if (err) {
           console.error('Error searching emails:', err);
           return;
@@ -114,14 +115,14 @@ export class EmailMonitor {
       return;
     }
 
-    pca.getTokenCache().deserialize(credentials.tokenCache);
-    const accounts = await pca.getTokenCache().getAllAccounts();
+    msalModule.pca.getTokenCache().deserialize(credentials.tokenCache);
+    const accounts = await msalModule.pca.getTokenCache().getAllAccounts();
     if (accounts.length === 0) {
       console.error("No accounts found in token cache.");
       return;
     }
     const account = accounts[0];
-    const response = await pca.acquireTokenSilent({
+    const response = await msalModule.pca.acquireTokenSilent({
       account,
       scopes: ["User.Read", "Mail.ReadWrite", "Mail.Send", "Files.ReadWrite.All"],
     });
@@ -174,7 +175,7 @@ export class EmailMonitor {
             });
 
             // Generate and send AI response
-            await aiResponder.generateAndSendResponse(emailCase, accessToken);
+            await (aiResponder.generateAndSendResponse as (emailCase: EmailCase, accessToken: string) => Promise<any>)(emailCase, accessToken);
             
             // Mark email as seen
             this.imap!.addFlags(seqno, ['\\Seen'], (err) => {
