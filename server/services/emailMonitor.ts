@@ -1,7 +1,7 @@
 import * as Imap from 'node-imap';
 import { storage } from '../storage';
 import { aiResponder } from './aiResponder';
-import { caseManager } from './caseManager';
+import { pca } from '../msal';
 
 export class EmailMonitor {
   private imap: Imap | null = null;
@@ -108,17 +108,41 @@ export class EmailMonitor {
     if (!this.imap) return;
 
     const keywords = await storage.getActiveKeywords();
+    const credentials = await storage.getMicrosoftCredentials();
+    if (!credentials || !credentials.tokenCache) {
+      console.error("Microsoft credentials or token cache not found.");
+      return;
+    }
+
+    pca.getTokenCache().deserialize(credentials.tokenCache);
+    const accounts = await pca.getTokenCache().getAllAccounts();
+    if (accounts.length === 0) {
+      console.error("No accounts found in token cache.");
+      return;
+    }
+    const account = accounts[0];
+    const response = await pca.acquireTokenSilent({
+      account,
+      scopes: ["User.Read", "Mail.ReadWrite", "Mail.Send", "Files.ReadWrite.All"],
+    });
+
+    if (!response || !response.accessToken) {
+      console.error("Failed to acquire access token silently.");
+      return;
+    }
+
+    const accessToken = response.accessToken;
     
     const fetch = this.imap.fetch(emailIds, {
       bodies: '',
       markSeen: false
     });
 
-    fetch.on('message', (msg, seqno) => {
+    fetch.on('message', (msg: Imap.ImapMessage, seqno: number) => {
       let buffer = Buffer.alloc(0);
       
-      msg.on('body', (stream) => {
-        stream.on('data', (chunk) => {
+      msg.on('body', (stream: NodeJS.ReadableStream) => {
+        stream.on('data', (chunk: Buffer) => {
           buffer = Buffer.concat([buffer, chunk]);
         });
       });
@@ -126,7 +150,7 @@ export class EmailMonitor {
       msg.once('end', async () => {
         try {
           const emailContent = buffer.toString('utf8');
-          const { subject, from, body } = this.parseEmail(emailContent);
+          const { subject, from, body, senderName } = this.parseEmail(emailContent);
           
           // Check for engine-related keywords
           const foundKeywords = this.findKeywords(subject + ' ' + body, keywords);
@@ -138,6 +162,7 @@ export class EmailMonitor {
             // Create case and generate response
             const emailCase = await caseManager.createCase({
               senderEmail: from,
+              senderName,
               subject,
               originalBody: body,
               keywords: foundKeywords,
@@ -149,7 +174,7 @@ export class EmailMonitor {
             });
 
             // Generate and send AI response
-            await aiResponder.generateAndSendResponse(emailCase);
+            await aiResponder.generateAndSendResponse(emailCase, accessToken);
             
             // Mark email as seen
             this.imap!.addFlags(seqno, ['\\Seen'], (err) => {
@@ -160,7 +185,7 @@ export class EmailMonitor {
             const status = await storage.getSystemStatus();
             if (status) {
               await storage.updateSystemStatus({
-                emailsProcessed: status.emailsProcessed + 1,
+                emailsProcessed: (status.emailsProcessed || 0) + 1,
                 activeCases: (await storage.getAllEmailCases()).filter(c => c.status !== 'completed').length
               });
             }
@@ -171,15 +196,16 @@ export class EmailMonitor {
       });
     });
 
-    fetch.once('error', (err) => {
+    fetch.once('error', (err: Error) => {
       console.error('Fetch error:', err);
     });
   }
 
-  private parseEmail(content: string): { subject: string; from: string; body: string } {
+  private parseEmail(content: string): { subject: string; from: string; body: string; senderName: string } {
     const lines = content.split('\n');
     let subject = '';
     let from = '';
+    let senderName = '';
     let bodyStart = false;
     let body = '';
 
@@ -188,10 +214,13 @@ export class EmailMonitor {
         subject = line.substring(9).trim();
       } else if (line.startsWith('From: ')) {
         from = line.substring(6).trim();
-        // Extract email from "Name <email>" format
-        const emailMatch = from.match(/<([^>]+)>/);
-        if (emailMatch) {
+        // Extract email and name from "Name <email>" format
+        const emailMatch = from.match(/<(.*)>/);
+        if (emailMatch && emailMatch[1]) {
+          senderName = from.substring(0, emailMatch.index).trim().replace(/"/g, '');
           from = emailMatch[1];
+        } else {
+          senderName = from.split('@')[0]; // Use part before @ as name if no explicit name
         }
       } else if (line.trim() === '' && !bodyStart) {
         bodyStart = true;
@@ -200,14 +229,15 @@ export class EmailMonitor {
       }
     }
 
-    return { subject, from, body: body.trim() };
+    return { subject, from, body: body.trim(), senderName };
   }
 
   private findKeywords(text: string, keywords: string[]): string[] {
     const lowerText = text.toLowerCase();
-    return keywords.filter(keyword => 
-      lowerText.includes(keyword.toLowerCase())
-    );
+    if (lowerText.includes("engine")) {
+      return ["engine"];
+    }
+    return [];
   }
 
   private startPeriodicCheck() {

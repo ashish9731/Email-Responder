@@ -25,6 +25,7 @@ export const emailCases = pgTable("email_cases", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   caseNumber: text("case_number").notNull().unique(),
   senderEmail: text("sender_email").notNull(),
+  senderName: text("sender_name"),
   subject: text("subject").notNull(),
   originalBody: text("original_body").notNull(),
   keywords: json("keywords").$type<string[]>().notNull(),
@@ -64,6 +65,7 @@ export const microsoftCredentials = pgTable("microsoft_credentials", {
   clientId: text("client_id").notNull(),
   clientSecret: text("client_secret").notNull(),
   tenantId: text("tenant_id").notNull(),
+  tokenCache: text("token_cache"),
   connectionType: text("connection_type").notNull(), // 'manual' or 'integration'
   isActive: boolean("is_active").default(true),
   createdAt: timestamp("created_at").default(sql`now()`),
@@ -79,6 +81,7 @@ export const insertEmailCaseSchema = createInsertSchema(emailCases).omit({
   id: true,
   createdAt: true,
   updatedAt: true,
+  caseNumber: true,
 });
 
 export const insertSystemStatusSchema = createInsertSchema(systemStatus).omit({
