@@ -12,11 +12,16 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Plus, Filter } from "lucide-react";
+import { Plus, Filter, Mail } from "lucide-react";
 
 export default function Dashboard() {
   const { toast } = useToast();
   const [newKeyword, setNewKeyword] = useState("");
+  const [manualCreds, setManualCreds] = useState({
+    clientId: "",
+    clientSecret: "",
+    tenantId: ""
+  });
 
   // Fetch system status
   const { data: systemStatus, isLoading: statusLoading } = useQuery({
@@ -33,6 +38,12 @@ export default function Dashboard() {
   const { data: cases = [] } = useQuery({
     queryKey: ["/api/cases"],
   }) as { data: any[] };
+
+  // Fetch Microsoft connection status
+  const { data: microsoftStatus } = useQuery({
+    queryKey: ["/api/microsoft/status"],
+    refetchInterval: 30000, // Update every 30 seconds
+  }) as { data: any };
 
   // Add keyword mutation
   const addKeywordMutation = useMutation({
@@ -64,6 +75,28 @@ export default function Dashboard() {
     },
   });
 
+  // Save manual Microsoft credentials mutation
+  const saveManualCredsMutation = useMutation({
+    mutationFn: async (creds: typeof manualCreds) => {
+      const response = await apiRequest("POST", "/api/microsoft/manual", creds);
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/system/status"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/microsoft/status"] });
+      toast({ title: "Microsoft credentials saved successfully" });
+      setManualCreds({ clientId: "", clientSecret: "", tenantId: "" });
+    },
+    onError: (error: any) => {
+      console.error("Failed to save Microsoft credentials:", error);
+      toast({ 
+        title: "Failed to save Microsoft credentials", 
+        description: error?.message || "Please check your credentials and try again",
+        variant: "destructive" 
+      });
+    },
+  });
+
   const handleAddKeyword = () => {
     if (newKeyword.trim()) {
       addKeywordMutation.mutate(newKeyword.trim());
@@ -72,6 +105,14 @@ export default function Dashboard() {
 
   const handleRemoveKeyword = (id: string) => {
     removeKeywordMutation.mutate(id);
+  };
+
+  const handleSaveManualCreds = () => {
+    if (manualCreds.clientId && manualCreds.clientSecret && manualCreds.tenantId) {
+      saveManualCredsMutation.mutate(manualCreds);
+    } else {
+      toast({ title: "Please fill in all credential fields", variant: "destructive" });
+    }
   };
 
   const formatUptime = (seconds: number) => {
@@ -154,48 +195,128 @@ export default function Dashboard() {
               <CardHeader>
                 <CardTitle className="flex items-center text-foreground">
                   <span className="mr-2">🔗</span>
-                  Microsoft Graph API
+                  Microsoft Connections
                 </CardTitle>
-                <p className="text-sm text-muted-foreground">Configure OneDrive integration</p>
+                <p className="text-sm text-muted-foreground">Choose automatic or manual setup</p>
               </CardHeader>
-              <CardContent className="space-y-4">
+              <CardContent className="space-y-6">
+                {/* Automatic Connection Section */}
                 <div className="space-y-4">
-                  <div>
-                    <Label htmlFor="app-id">Application ID</Label>
-                    <Input 
-                      id="app-id"
-                      placeholder="Enter Application ID" 
-                      data-testid="input-app-id"
-                    />
+                  <div className="flex items-center space-x-2">
+                    <span className="text-sm font-semibold text-foreground">🚀 One-Click Setup</span>
+                    <Badge variant="secondary" className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300">
+                      Recommended
+                    </Badge>
                   </div>
-                  <div>
-                    <Label htmlFor="client-secret">Client Secret</Label>
-                    <Input 
-                      id="client-secret"
-                      type="password" 
-                      placeholder="Enter Client Secret"
-                      data-testid="input-client-secret"
-                    />
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <Button 
+                      className="w-full"
+                      onClick={() => window.open('/integration/outlook', '_blank')}
+                      data-testid="button-connect-outlook-auto"
+                    >
+                      <Mail className="mr-2 h-4 w-4" />
+                      Connect Outlook
+                    </Button>
+                    <Button 
+                      variant="outline"
+                      className="w-full"
+                      onClick={() => window.open('/integration/onedrive', '_blank')}
+                      data-testid="button-connect-onedrive-auto"
+                    >
+                      ☁️ Connect OneDrive
+                    </Button>
                   </div>
-                  <div>
-                    <Label htmlFor="tenant-id">Tenant ID</Label>
-                    <Input 
-                      id="tenant-id"
-                      placeholder="Enter Tenant ID"
-                      data-testid="input-tenant-id"
-                    />
+                  <p className="text-xs text-muted-foreground">
+                    Secure OAuth2 authentication handled automatically by Replit
+                  </p>
+                </div>
+
+                <div className="flex items-center">
+                  <div className="flex-1 border-t border-border"></div>
+                  <span className="px-3 text-xs text-muted-foreground">OR</span>
+                  <div className="flex-1 border-t border-border"></div>
+                </div>
+
+                {/* Manual Connection Section */}
+                <div className="space-y-4">
+                  <div className="flex items-center space-x-2">
+                    <span className="text-sm font-semibold text-foreground">⚙️ Manual Setup</span>
                   </div>
-                  <div className="pt-4 border-t border-border">
-                    <div className="flex items-center justify-between">
+                  <div className="grid grid-cols-1 gap-3">
+                    <div>
+                      <Label htmlFor="app-id">Application ID</Label>
+                      <Input 
+                        id="app-id"
+                        value={manualCreds.clientId}
+                        onChange={(e) => setManualCreds({ ...manualCreds, clientId: e.target.value })}
+                        placeholder="Enter Application ID" 
+                        data-testid="input-app-id"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="client-secret">Client Secret</Label>
+                      <Input 
+                        id="client-secret"
+                        type="password"
+                        value={manualCreds.clientSecret}
+                        onChange={(e) => setManualCreds({ ...manualCreds, clientSecret: e.target.value })}
+                        placeholder="Enter Client Secret"
+                        data-testid="input-client-secret"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="tenant-id">Tenant ID</Label>
+                      <Input 
+                        id="tenant-id"
+                        value={manualCreds.tenantId}
+                        onChange={(e) => setManualCreds({ ...manualCreds, tenantId: e.target.value })}
+                        placeholder="Enter Tenant ID"
+                        data-testid="input-tenant-id"
+                      />
+                    </div>
+                    <Button 
+                      variant="secondary" 
+                      className="w-full"
+                      onClick={handleSaveManualCreds}
+                      disabled={saveManualCredsMutation.isPending}
+                      data-testid="button-save-manual-creds"
+                    >
+                      💾 {saveManualCredsMutation.isPending ? "Saving..." : "Save Manual Credentials"}
+                    </Button>
+                  </div>
+                </div>
+
+                <div className="pt-4 border-t border-border">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
+                      <div>
+                        <p className="text-sm font-medium text-foreground">Outlook</p>
+                        <p className="text-xs text-muted-foreground">Email sending</p>
+                        {microsoftStatus?.outlook?.type && microsoftStatus.outlook.type !== 'none' && (
+                          <p className="text-xs text-blue-600 dark:text-blue-400">via {microsoftStatus.outlook.type}</p>
+                        )}
+                      </div>
                       <div className="flex items-center space-x-2">
-                        <div className={`w-2 h-2 rounded-full ${systemStatus?.onedriveConnected ? 'bg-green-500' : 'bg-red-500'}`}></div>
-                        <span className={`text-sm font-medium ${systemStatus?.onedriveConnected ? 'text-green-600' : 'text-red-600'}`}>
-                          {systemStatus?.onedriveConnected ? 'Connected' : 'Disconnected'}
+                        <div className={`w-2 h-2 rounded-full ${microsoftStatus?.outlook?.connected ? 'bg-green-500' : 'bg-red-500'}`}></div>
+                        <span className={`text-xs font-medium ${microsoftStatus?.outlook?.connected ? 'text-green-600' : 'text-red-600'}`}>
+                          {microsoftStatus?.outlook?.connected ? 'Connected' : 'Disconnected'}
                         </span>
                       </div>
-                      <Button variant="secondary" size="sm" data-testid="button-refresh-token">
-                        🔄 Refresh
-                      </Button>
+                    </div>
+                    <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
+                      <div>
+                        <p className="text-sm font-medium text-foreground">OneDrive</p>
+                        <p className="text-xs text-muted-foreground">File storage</p>
+                        {microsoftStatus?.onedrive?.type && microsoftStatus.onedrive.type !== 'none' && (
+                          <p className="text-xs text-blue-600 dark:text-blue-400">via {microsoftStatus.onedrive.type}</p>
+                        )}
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <div className={`w-2 h-2 rounded-full ${microsoftStatus?.onedrive?.connected ? 'bg-green-500' : 'bg-red-500'}`}></div>
+                        <span className={`text-xs font-medium ${microsoftStatus?.onedrive?.connected ? 'text-green-600' : 'text-red-600'}`}>
+                          {microsoftStatus?.onedrive?.connected ? 'Connected' : 'Disconnected'}
+                        </span>
+                      </div>
                     </div>
                   </div>
                 </div>

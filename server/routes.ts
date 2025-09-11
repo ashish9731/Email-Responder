@@ -4,7 +4,7 @@ import { storage } from "./storage";
 import { emailMonitor } from "./services/emailMonitor";
 import { caseManager } from "./services/caseManager";
 import { createFolderStructure } from "./onedriveClient";
-import { insertConfigurationSchema, insertKeywordSchema } from "@shared/schema";
+import { insertConfigurationSchema, insertKeywordSchema, insertMicrosoftCredentialsSchema } from "@shared/schema";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   
@@ -157,6 +157,100 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
     } catch (error) {
       res.status(500).json({ success: false, message: "Connection test failed" });
+    }
+  });
+
+  // Microsoft integration routes
+  app.get("/integration/outlook", async (req, res) => {
+    try {
+      // Redirect to Replit integration setup
+      res.redirect("https://replit.com/@" + process.env.REPL_OWNER + "/" + process.env.REPL_SLUG + "/integrations/outlook");
+    } catch (error) {
+      res.status(500).json({ message: "Failed to redirect to Outlook integration" });
+    }
+  });
+
+  app.get("/integration/onedrive", async (req, res) => {
+    try {
+      // Redirect to Replit integration setup
+      res.redirect("https://replit.com/@" + process.env.REPL_OWNER + "/" + process.env.REPL_SLUG + "/integrations/onedrive");
+    } catch (error) {
+      res.status(500).json({ message: "Failed to redirect to OneDrive integration" });
+    }
+  });
+
+  // Manual Microsoft credentials route
+  app.post("/api/microsoft/manual", async (req, res) => {
+    try {
+      const validatedData = insertMicrosoftCredentialsSchema.parse({
+        ...req.body,
+        connectionType: "manual",
+        isActive: true
+      });
+      
+      // Save the credentials using storage
+      const savedCredentials = await storage.saveMicrosoftCredentials(validatedData);
+      
+      // Update system status to reflect manual connection
+      await storage.updateSystemStatus({
+        outlookConnected: true,
+        onedriveConnected: true
+      });
+      
+      res.json({ 
+        success: true, 
+        message: "Microsoft credentials saved successfully",
+        connectionType: "manual",
+        credentialsId: savedCredentials.id
+      });
+    } catch (error) {
+      console.error("Error saving Microsoft credentials:", error);
+      res.status(400).json({ 
+        success: false, 
+        message: "Failed to save Microsoft credentials",
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
+  // Check Microsoft connection status
+  app.get("/api/microsoft/status", async (req, res) => {
+    try {
+      // Get system status and Microsoft credentials
+      const systemStatus = await storage.getSystemStatus();
+      const microsoftCredentials = await storage.getMicrosoftCredentials();
+      
+      let outlookStatus = false;
+      let onedriveStatus = false;
+      let connectionType = "none";
+      
+      // Check if we have manual credentials saved
+      if (microsoftCredentials && microsoftCredentials.isActive) {
+        connectionType = "manual";
+        outlookStatus = systemStatus?.outlookConnected || false;
+        onedriveStatus = systemStatus?.onedriveConnected || false;
+      } else {
+        // Check for integration status
+        outlookStatus = systemStatus?.outlookConnected || false;
+        onedriveStatus = systemStatus?.onedriveConnected || false;
+        connectionType = (outlookStatus || onedriveStatus) ? "integration" : "none";
+      }
+
+      res.json({
+        outlook: {
+          connected: outlookStatus,
+          type: connectionType
+        },
+        onedrive: {
+          connected: onedriveStatus,
+          type: connectionType
+        },
+        hasCredentials: !!microsoftCredentials,
+        credentialsType: microsoftCredentials?.connectionType || "none"
+      });
+    } catch (error) {
+      console.error("Error checking Microsoft connection status:", error);
+      res.status(500).json({ message: "Failed to check Microsoft connection status" });
     }
   });
 

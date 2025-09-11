@@ -6,7 +6,9 @@ import {
   type SystemStatus,
   type InsertSystemStatus,
   type Keyword,
-  type InsertKeyword
+  type InsertKeyword,
+  type MicrosoftCredentials,
+  type InsertMicrosoftCredentials
 } from "@shared/schema";
 import { randomUUID } from "crypto";
 
@@ -32,6 +34,12 @@ export interface IStorage {
   addKeyword(keyword: InsertKeyword): Promise<Keyword>;
   removeKeyword(id: string): Promise<void>;
   getActiveKeywords(): Promise<string[]>;
+  
+  // Microsoft credentials methods
+  getMicrosoftCredentials(): Promise<MicrosoftCredentials | undefined>;
+  saveMicrosoftCredentials(credentials: InsertMicrosoftCredentials): Promise<MicrosoftCredentials>;
+  updateMicrosoftCredentials(credentials: Partial<MicrosoftCredentials>): Promise<MicrosoftCredentials>;
+  deleteMicrosoftCredentials(): Promise<void>;
 }
 
 export class MemStorage implements IStorage {
@@ -39,8 +47,10 @@ export class MemStorage implements IStorage {
   private emailCases: Map<string, EmailCase> = new Map();
   private systemStatuses: Map<string, SystemStatus> = new Map();
   private keywords: Map<string, Keyword> = new Map();
+  private microsoftCredentials: Map<string, MicrosoftCredentials> = new Map();
   private currentConfigId: string | null = null;
   private currentStatusId: string | null = null;
+  private currentMsCredId: string | null = null;
 
   constructor() {
     // Initialize with default keywords
@@ -66,6 +76,7 @@ export class MemStorage implements IStorage {
       id: statusId,
       emailMonitorActive: false,
       autoResponderActive: false,
+      outlookConnected: false,
       onedriveConnected: false,
       lastEmailCheck: null,
       emailsProcessed: 0,
@@ -195,6 +206,47 @@ export class MemStorage implements IStorage {
     return Array.from(this.keywords.values())
       .filter(k => k.isActive)
       .map(k => k.keyword);
+  }
+
+  async getMicrosoftCredentials(): Promise<MicrosoftCredentials | undefined> {
+    if (!this.currentMsCredId) return undefined;
+    return this.microsoftCredentials.get(this.currentMsCredId);
+  }
+
+  async saveMicrosoftCredentials(credentials: InsertMicrosoftCredentials): Promise<MicrosoftCredentials> {
+    const id = this.currentMsCredId || randomUUID();
+    const microsoftCreds: MicrosoftCredentials = {
+      ...credentials,
+      id,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    
+    this.microsoftCredentials.set(id, microsoftCreds);
+    this.currentMsCredId = id;
+    return microsoftCreds;
+  }
+
+  async updateMicrosoftCredentials(credentials: Partial<MicrosoftCredentials>): Promise<MicrosoftCredentials> {
+    if (!this.currentMsCredId) {
+      throw new Error("No Microsoft credentials exist to update");
+    }
+    
+    const existing = this.microsoftCredentials.get(this.currentMsCredId);
+    if (!existing) {
+      throw new Error("Microsoft credentials not found");
+    }
+    
+    const updated = { ...existing, ...credentials, updatedAt: new Date() };
+    this.microsoftCredentials.set(this.currentMsCredId, updated);
+    return updated;
+  }
+
+  async deleteMicrosoftCredentials(): Promise<void> {
+    if (this.currentMsCredId) {
+      this.microsoftCredentials.delete(this.currentMsCredId);
+      this.currentMsCredId = null;
+    }
   }
 }
 

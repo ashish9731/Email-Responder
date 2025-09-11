@@ -41,6 +41,7 @@ export const systemStatus = pgTable("system_status", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   emailMonitorActive: boolean("email_monitor_active").default(false),
   autoResponderActive: boolean("auto_responder_active").default(false),
+  outlookConnected: boolean("outlook_connected").default(false),
   onedriveConnected: boolean("onedrive_connected").default(false),
   lastEmailCheck: timestamp("last_email_check"),
   emailsProcessed: integer("emails_processed").default(0),
@@ -56,6 +57,17 @@ export const keywords = pgTable("keywords", {
   keyword: text("keyword").notNull().unique(),
   isActive: boolean("is_active").default(true),
   createdAt: timestamp("created_at").default(sql`now()`),
+});
+
+export const microsoftCredentials = pgTable("microsoft_credentials", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  clientId: text("client_id").notNull(),
+  clientSecret: text("client_secret").notNull(),
+  tenantId: text("tenant_id").notNull(),
+  connectionType: text("connection_type").notNull(), // 'manual' or 'integration'
+  isActive: boolean("is_active").default(true),
+  createdAt: timestamp("created_at").default(sql`now()`),
+  updatedAt: timestamp("updated_at").default(sql`now()`),
 });
 
 export const insertConfigurationSchema = createInsertSchema(configurations).omit({
@@ -79,6 +91,12 @@ export const insertKeywordSchema = createInsertSchema(keywords).omit({
   createdAt: true,
 });
 
+export const insertMicrosoftCredentialsSchema = createInsertSchema(microsoftCredentials).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
 export type Configuration = typeof configurations.$inferSelect;
 export type InsertConfiguration = z.infer<typeof insertConfigurationSchema>;
 export type EmailCase = typeof emailCases.$inferSelect;
@@ -87,3 +105,5 @@ export type SystemStatus = typeof systemStatus.$inferSelect;
 export type InsertSystemStatus = z.infer<typeof insertSystemStatusSchema>;
 export type Keyword = typeof keywords.$inferSelect;
 export type InsertKeyword = z.infer<typeof insertKeywordSchema>;
+export type MicrosoftCredentials = typeof microsoftCredentials.$inferSelect;
+export type InsertMicrosoftCredentials = z.infer<typeof insertMicrosoftCredentialsSchema>;
