@@ -160,22 +160,58 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Microsoft integration routes
+  // Microsoft integration routes - Use Replit integration system
   app.get("/integration/outlook", async (req, res) => {
     try {
-      // Redirect to Replit integration setup
-      res.redirect("https://replit.com/@" + process.env.REPL_OWNER + "/" + process.env.REPL_SLUG + "/integrations/outlook");
+      // Show integration setup page with instructions
+      res.send(`
+        <html>
+          <head><title>Connect Outlook</title></head>
+          <body style="font-family: Arial, sans-serif; max-width: 600px; margin: 50px auto; padding: 20px;">
+            <h2>🔗 Connect Your Outlook Account</h2>
+            <p>To enable automatic email sending through Outlook:</p>
+            <ol>
+              <li>Go to your <a href="/integrations" target="_blank">Replit Integrations page</a></li>
+              <li>Search for "Outlook" in the integrations</li>
+              <li>Click "Connect" and authorize access</li>
+              <li>Return to your <a href="/">Email Responder Dashboard</a></li>
+            </ol>
+            <div style="background: #f0f8ff; padding: 15px; border-radius: 8px; margin: 20px 0;">
+              <strong>💡 Alternative:</strong> Use the manual setup option in your dashboard by entering your Microsoft credentials directly.
+            </div>
+            <a href="/" style="background: #007acc; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">← Back to Dashboard</a>
+          </body>
+        </html>
+      `);
     } catch (error) {
-      res.status(500).json({ message: "Failed to redirect to Outlook integration" });
+      res.status(500).json({ message: "Failed to show Outlook integration page" });
     }
   });
 
   app.get("/integration/onedrive", async (req, res) => {
     try {
-      // Redirect to Replit integration setup
-      res.redirect("https://replit.com/@" + process.env.REPL_OWNER + "/" + process.env.REPL_SLUG + "/integrations/onedrive");
+      // Show integration setup page with instructions
+      res.send(`
+        <html>
+          <head><title>Connect OneDrive</title></head>
+          <body style="font-family: Arial, sans-serif; max-width: 600px; margin: 50px auto; padding: 20px;">
+            <h2>☁️ Connect Your OneDrive Account</h2>
+            <p>To enable automatic file storage in OneDrive:</p>
+            <ol>
+              <li>Go to your <a href="/integrations" target="_blank">Replit Integrations page</a></li>
+              <li>Search for "OneDrive" in the integrations</li>
+              <li>Click "Connect" and authorize access</li>
+              <li>Return to your <a href="/">Email Responder Dashboard</a></li>
+            </ol>
+            <div style="background: #f0f8ff; padding: 15px; border-radius: 8px; margin: 20px 0;">
+              <strong>💡 Alternative:</strong> Use the manual setup option in your dashboard by entering your Microsoft credentials directly.
+            </div>
+            <a href="/" style="background: #007acc; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">← Back to Dashboard</a>
+          </body>
+        </html>
+      `);
     } catch (error) {
-      res.status(500).json({ message: "Failed to redirect to OneDrive integration" });
+      res.status(500).json({ message: "Failed to show OneDrive integration page" });
     }
   });
 

@@ -98,6 +98,13 @@ export class MemStorage implements IStorage {
     const configuration: Configuration = {
       ...config,
       id,
+      popServer: config.popServer || null,
+      popPort: config.popPort || null,
+      graphAppId: config.graphAppId || null,
+      graphClientSecret: config.graphClientSecret || null,
+      graphTenantId: config.graphTenantId || null,
+      openaiApiKey: config.openaiApiKey || null,
+      isActive: config.isActive || false,
       createdAt: new Date(),
     };
     
@@ -129,6 +136,10 @@ export class MemStorage implements IStorage {
       ...emailCase,
       id,
       caseNumber,
+      responseBody: emailCase.responseBody || null,
+      attachmentUrl: emailCase.attachmentUrl || null,
+      followUpSent: emailCase.followUpSent || false,
+      followUpAt: emailCase.followUpAt || null,
       createdAt: new Date(),
       updatedAt: new Date(),
     };
@@ -147,7 +158,7 @@ export class MemStorage implements IStorage {
 
   async getAllEmailCases(): Promise<EmailCase[]> {
     return Array.from(this.emailCases.values()).sort(
-      (a, b) => b.createdAt.getTime() - a.createdAt.getTime()
+      (a, b) => (b.createdAt?.getTime() || 0) - (a.createdAt?.getTime() || 0)
     );
   }
 
@@ -191,6 +202,7 @@ export class MemStorage implements IStorage {
     const newKeyword: Keyword = {
       ...keyword,
       id,
+      isActive: keyword.isActive !== undefined ? keyword.isActive : true,
       createdAt: new Date(),
     };
     
@@ -218,6 +230,7 @@ export class MemStorage implements IStorage {
     const microsoftCreds: MicrosoftCredentials = {
       ...credentials,
       id,
+      isActive: credentials.isActive !== undefined ? credentials.isActive : true,
       createdAt: new Date(),
       updatedAt: new Date(),
     };

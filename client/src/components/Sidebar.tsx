@@ -2,6 +2,7 @@ import { Button } from "@/components/ui/button";
 import { useMutation } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { Link, useLocation } from "wouter";
 import { 
   BarChart3, 
   Settings, 
@@ -14,6 +15,7 @@ import {
 
 export default function Sidebar() {
   const { toast } = useToast();
+  const [location] = useLocation();
 
   const logoutMutation = useMutation({
     mutationFn: async () => {
@@ -46,54 +48,78 @@ export default function Sidebar() {
       </div>
       
       <nav className="flex-1 px-4 py-6 space-y-2">
-        <a 
-          href="#" 
-          className="flex items-center px-3 py-2 text-sm font-medium bg-secondary text-secondary-foreground rounded-lg"
+        <Link 
+          to="/" 
+          className={`flex items-center px-3 py-2 text-sm font-medium rounded-lg ${
+            location === "/" 
+              ? "bg-secondary text-secondary-foreground" 
+              : "text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
+          }`}
           data-testid="nav-dashboard"
         >
           <BarChart3 className="w-5 h-5 mr-3" />
           Dashboard
-        </a>
-        <a 
-          href="#" 
-          className="flex items-center px-3 py-2 text-sm font-medium text-muted-foreground hover:bg-accent hover:text-accent-foreground rounded-lg transition-colors"
+        </Link>
+        <Link 
+          to="/configuration" 
+          className={`flex items-center px-3 py-2 text-sm font-medium rounded-lg ${
+            location === "/configuration" 
+              ? "bg-secondary text-secondary-foreground" 
+              : "text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
+          }`}
           data-testid="nav-configuration"
         >
           <Settings className="w-5 h-5 mr-3" />
           Configuration
-        </a>
-        <a 
-          href="#" 
-          className="flex items-center px-3 py-2 text-sm font-medium text-muted-foreground hover:bg-accent hover:text-accent-foreground rounded-lg transition-colors"
+        </Link>
+        <Link 
+          to="/email-monitor" 
+          className={`flex items-center px-3 py-2 text-sm font-medium rounded-lg ${
+            location === "/email-monitor" 
+              ? "bg-secondary text-secondary-foreground" 
+              : "text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
+          }`}
           data-testid="nav-email-monitor"
         >
           <Activity className="w-5 h-5 mr-3" />
           Email Monitor
-        </a>
-        <a 
-          href="#" 
-          className="flex items-center px-3 py-2 text-sm font-medium text-muted-foreground hover:bg-accent hover:text-accent-foreground rounded-lg transition-colors"
+        </Link>
+        <Link 
+          to="/case-management" 
+          className={`flex items-center px-3 py-2 text-sm font-medium rounded-lg ${
+            location === "/case-management" 
+              ? "bg-secondary text-secondary-foreground" 
+              : "text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
+          }`}
           data-testid="nav-case-management"
         >
           <FolderOpen className="w-5 h-5 mr-3" />
           Case Management
-        </a>
-        <a 
-          href="#" 
-          className="flex items-center px-3 py-2 text-sm font-medium text-muted-foreground hover:bg-accent hover:text-accent-foreground rounded-lg transition-colors"
+        </Link>
+        <Link 
+          to="/onedrive-files" 
+          className={`flex items-center px-3 py-2 text-sm font-medium rounded-lg ${
+            location === "/onedrive-files" 
+              ? "bg-secondary text-secondary-foreground" 
+              : "text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
+          }`}
           data-testid="nav-onedrive-files"
         >
           <Cloud className="w-5 h-5 mr-3" />
           OneDrive Files
-        </a>
-        <a 
-          href="#" 
-          className="flex items-center px-3 py-2 text-sm font-medium text-muted-foreground hover:bg-accent hover:text-accent-foreground rounded-lg transition-colors"
+        </Link>
+        <Link 
+          to="/analytics" 
+          className={`flex items-center px-3 py-2 text-sm font-medium rounded-lg ${
+            location === "/analytics" 
+              ? "bg-secondary text-secondary-foreground" 
+              : "text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
+          }`}
           data-testid="nav-analytics"
         >
           <BarChart3 className="w-5 h-5 mr-3" />
           Analytics
-        </a>
+        </Link>
       </nav>
       
       <div className="p-4 border-t border-border">
