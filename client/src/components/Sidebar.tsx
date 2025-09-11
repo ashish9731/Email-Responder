@@ -1,0 +1,124 @@
+import { Button } from "@/components/ui/button";
+import { useMutation } from "@tanstack/react-query";
+import { apiRequest } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
+import { 
+  BarChart3, 
+  Settings, 
+  Mail, 
+  FolderOpen, 
+  Cloud, 
+  Activity,
+  LogOut
+} from "lucide-react";
+
+export default function Sidebar() {
+  const { toast } = useToast();
+
+  const logoutMutation = useMutation({
+    mutationFn: async () => {
+      await apiRequest("POST", "/api/system/stop");
+    },
+    onSuccess: () => {
+      toast({ title: "System stopped successfully" });
+    },
+    onError: () => {
+      toast({ title: "Failed to stop system", variant: "destructive" });
+    },
+  });
+
+  const handleLogout = () => {
+    logoutMutation.mutate();
+  };
+
+  return (
+    <aside className="w-64 bg-card border-r border-border flex flex-col">
+      <div className="p-6 border-b border-border">
+        <div className="flex items-center space-x-3">
+          <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
+            <Mail className="h-4 w-4 text-primary-foreground" />
+          </div>
+          <div>
+            <h1 className="text-lg font-semibold text-foreground">Auto Responder</h1>
+            <p className="text-xs text-muted-foreground">Outlook Engine Bot</p>
+          </div>
+        </div>
+      </div>
+      
+      <nav className="flex-1 px-4 py-6 space-y-2">
+        <a 
+          href="#" 
+          className="flex items-center px-3 py-2 text-sm font-medium bg-secondary text-secondary-foreground rounded-lg"
+          data-testid="nav-dashboard"
+        >
+          <BarChart3 className="w-5 h-5 mr-3" />
+          Dashboard
+        </a>
+        <a 
+          href="#" 
+          className="flex items-center px-3 py-2 text-sm font-medium text-muted-foreground hover:bg-accent hover:text-accent-foreground rounded-lg transition-colors"
+          data-testid="nav-configuration"
+        >
+          <Settings className="w-5 h-5 mr-3" />
+          Configuration
+        </a>
+        <a 
+          href="#" 
+          className="flex items-center px-3 py-2 text-sm font-medium text-muted-foreground hover:bg-accent hover:text-accent-foreground rounded-lg transition-colors"
+          data-testid="nav-email-monitor"
+        >
+          <Activity className="w-5 h-5 mr-3" />
+          Email Monitor
+        </a>
+        <a 
+          href="#" 
+          className="flex items-center px-3 py-2 text-sm font-medium text-muted-foreground hover:bg-accent hover:text-accent-foreground rounded-lg transition-colors"
+          data-testid="nav-case-management"
+        >
+          <FolderOpen className="w-5 h-5 mr-3" />
+          Case Management
+        </a>
+        <a 
+          href="#" 
+          className="flex items-center px-3 py-2 text-sm font-medium text-muted-foreground hover:bg-accent hover:text-accent-foreground rounded-lg transition-colors"
+          data-testid="nav-onedrive-files"
+        >
+          <Cloud className="w-5 h-5 mr-3" />
+          OneDrive Files
+        </a>
+        <a 
+          href="#" 
+          className="flex items-center px-3 py-2 text-sm font-medium text-muted-foreground hover:bg-accent hover:text-accent-foreground rounded-lg transition-colors"
+          data-testid="nav-analytics"
+        >
+          <BarChart3 className="w-5 h-5 mr-3" />
+          Analytics
+        </a>
+      </nav>
+      
+      <div className="p-4 border-t border-border">
+        <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
+          <div className="flex items-center space-x-3">
+            <div className="w-8 h-8 bg-primary rounded-full flex items-center justify-center">
+              <span className="text-xs font-semibold text-primary-foreground">JD</span>
+            </div>
+            <div>
+              <p className="text-sm font-medium text-foreground">John Doe</p>
+              <p className="text-xs text-muted-foreground">Admin</p>
+            </div>
+          </div>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={handleLogout}
+            disabled={logoutMutation.isPending}
+            className="text-muted-foreground hover:text-destructive transition-colors"
+            data-testid="button-logout"
+          >
+            <LogOut className="h-4 w-4" />
+          </Button>
+        </div>
+      </div>
+    </aside>
+  );
+}
