@@ -7,7 +7,7 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// Import routes - using direct import
+// Import routes - using correct path relative to project root
 import routes from '../dist/server/routes.js';
 
 // Routes
