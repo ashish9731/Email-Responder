@@ -10,7 +10,7 @@ import { insertConfigurationSchema, insertKeywordSchema, insertMicrosoftCredenti
 // Define scopes for Microsoft Graph API
 const OUTLOOK_SCOPES = ["User.Read", "Mail.ReadWrite", "Mail.Send"];
 const ONEDRIVE_SCOPES = ["User.Read", "Files.ReadWrite.All"];
-const REDIRECT_URI = "http://localhost:5001/integration/auth/callback";
+const REDIRECT_URI = process.env.REDIRECT_URI || "http://localhost:5001/integration/auth/callback";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   
