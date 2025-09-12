@@ -1,302 +1,160 @@
-import Imap from 'node-imap';
-import { storage } from '../storage';
-import { aiResponder } from './aiResponder';
-import * as msalModule from '../msal';
-import { caseManager } from './caseManager';
+import { Client } from '@microsoft/microsoft-graph-client';
+import { storage } from '../storage.js';
+import { aiResponder } from './aiResponder.js';
 
 export class EmailMonitor {
-  private imap: Imap | null = null;
   private isRunning = false;
-  private checkInterval: NodeJS.Timeout | null = null;
+  private checkInterval = 30000; // 30 seconds
+  private intervalId: NodeJS.Timeout | null = null;
 
   async start() {
+    if (this.isRunning) return;
+    
+    this.isRunning = true;
+    await storage.updateSystemStatus({ emailMonitorActive: true });
+    
+    this.intervalId = setInterval(async () => {
+      await this.checkEmails();
+    }, this.checkInterval);
+    
+    console.log('Email monitor started');
+  }
+
+  async stop() {
+    if (!this.isRunning) return;
+    
+    this.isRunning = false;
+    if (this.intervalId) {
+      clearInterval(this.intervalId);
+      this.intervalId = null;
+    }
+    
+    await storage.updateSystemStatus({ emailMonitorActive: false });
+    console.log('Email monitor stopped');
+  }
+
+  async checkEmails() {
     try {
-      const config = await storage.getConfiguration();
-      if (!config || !config.isActive) {
-        throw new Error('No active configuration found');
+      const credentials = await storage.getMicrosoftCredentials();
+      if (!credentials?.tokenCache) {
+        console.log('No Microsoft credentials found');
+        return;
       }
 
-      this.imap = new Imap({
-        user: config.email,
-        password: config.password,
-        host: config.imapServer,
-        port: config.imapPort,
-        tls: true,
-        tlsOptions: { rejectUnauthorized: false }
+      const client = Client.init({
+        authProvider: (done) => {
+          done(null, credentials.tokenCache);
+        }
       });
 
-      this.imap.once('ready', () => {
-        console.log('IMAP connection ready');
-        this.openInbox();
+      const messages = await client
+        .api('/me/messages')
+        .filter('isRead eq false')
+        .top(10)
+        .get();
+
+      for (const message of messages.value) {
+        await this.processEmail(message, client);
+      }
+    } catch (error) {
+      console.error('Error checking emails:', error);
+    }
+  }
+
+  async processEmail(message: any, client: Client) {
+    try {
+      const activeKeywords = await storage.getActiveKeywords();
+      if (activeKeywords.length === 0) return;
+
+      const subject = message.subject || '';
+      const body = message.body?.content || '';
+      const senderEmail = message.from?.emailAddress?.address || '';
+      const senderName = message.from?.emailAddress?.name || '';
+
+      // Check both subject and body for keywords
+      const subjectKeywords = this.extractKeywords(subject, activeKeywords);
+      const bodyKeywords = this.extractKeywords(body, activeKeywords);
+      const allKeywords = Array.from(new Set([...subjectKeywords, ...bodyKeywords]));
+
+      if (allKeywords.length === 0) return;
+
+      // Create email case
+      const emailCase = await storage.createEmailCase({
+        senderEmail,
+        senderName,
+        subject,
+        originalBody: body,
+        keywords: allKeywords
       });
 
-      this.imap.once('error', (err: Error) => {
-        console.error('IMAP error:', err);
-        this.isRunning = false;
+      // Generate AI response
+      const responseBody = await aiResponder.generateResponse(
+        { subject, body, senderName, senderEmail },
+        allKeywords
+      );
+
+      // Send response email
+      await this.sendResponse(message, responseBody, client);
+
+      // Update case status
+      await storage.updateEmailCase(emailCase.id, {
+        status: 'responded',
+        responseBody
       });
 
-      this.imap.once('end', () => {
-        console.log('IMAP connection ended');
-        this.isRunning = false;
-      });
+      // Mark original email as read
+      await this.markAsRead(message.id, client);
 
-      this.imap.connect();
-      this.isRunning = true;
-
-      // Update system status
-      await storage.updateSystemStatus({
-        emailMonitorActive: true,
-        lastEmailCheck: new Date()
-      });
-
-      // Set up periodic checking
-      this.startPeriodicCheck();
+      console.log(`Processed email case: ${emailCase.caseNumber}`);
 
     } catch (error) {
-      console.error('Error starting email monitor:', error);
+      console.error('Error processing email:', error);
+    }
+  }
+
+  async sendResponse(originalMessage: any, response: string, client: Client) {
+    try {
+      await client.api('/me/sendMail').post({
+        message: {
+          subject: `Re: ${originalMessage.subject}`,
+          body: {
+            contentType: 'HTML',
+            content: response
+          },
+          toRecipients: [{
+            emailAddress: {
+              address: originalMessage.from.emailAddress.address
+            }
+          }]
+        }
+      });
+    } catch (error) {
+      console.error('Error sending response:', error);
       throw error;
     }
   }
 
-  private openInbox() {
-    if (!this.imap) return;
-
-    this.imap.openBox('INBOX', false, (err: Error, box: Imap.Box) => {
-      if (err) {
-        console.error('Error opening inbox:', err);
-        return;
-      }
-
-      console.log('Inbox opened, monitoring for new emails...');
-      this.checkForNewEmails();
-
-      // Listen for new emails
-      this.imap!.on('mail', () => {
-        console.log('New email received');
-        this.checkForNewEmails();
-      });
-    });
-  }
-
-  private async checkForNewEmails() {
+  private async markAsRead(messageId: string, client: Client) {
     try {
-      if (!this.imap) return;
-
-      // Search for unread emails
-      this.imap.search(['UNSEEN'], async (err: Error, results: string[]) => {
-        if (err) {
-          console.error('Error searching emails:', err);
-          return;
-        }
-
-        if (results && results.length > 0) {
-          console.log(`Found ${results.length} unread emails`);
-          await this.processEmails(results);
-        }
-
-        // Update last check time
-        await storage.updateSystemStatus({
-          lastEmailCheck: new Date()
-        });
-      });
-
+      await client.api(`/me/messages/${messageId}`)
+        .patch({ isRead: true });
     } catch (error) {
-      console.error('Error checking for new emails:', error);
+      console.error('Error marking email as read:', error);
     }
   }
 
-  private async processEmails(emailIds: number[]) {
-    if (!this.imap) return;
-
-    const keywords = await storage.getActiveKeywords();
-    const credentials = await storage.getMicrosoftCredentials();
-    if (!credentials || !credentials.tokenCache) {
-      console.error("Microsoft credentials or token cache not found.");
-      return;
-    }
-
-    msalModule.pca.getTokenCache().deserialize(credentials.tokenCache);
-    const accounts = await msalModule.pca.getTokenCache().getAllAccounts();
-    if (accounts.length === 0) {
-      console.error("No accounts found in token cache.");
-      return;
-    }
-    const account = accounts[0];
-    const response = await msalModule.pca.acquireTokenSilent({
-      account,
-      scopes: ["User.Read", "Mail.ReadWrite", "Mail.Send", "Files.ReadWrite.All"],
-    });
-
-    if (!response || !response.accessToken) {
-      console.error("Failed to acquire access token silently.");
-      return;
-    }
-
-    const accessToken = response.accessToken;
-    
-    const fetch = this.imap.fetch(emailIds, {
-      bodies: '',
-      markSeen: false
-    });
-
-    fetch.on('message', (msg: Imap.ImapMessage, seqno: number) => {
-      let buffer = Buffer.alloc(0);
-      
-      msg.on('body', (stream: NodeJS.ReadableStream) => {
-        stream.on('data', (chunk: Buffer) => {
-          buffer = Buffer.concat([buffer, chunk]);
-        });
-      });
-
-      msg.once('end', async () => {
-        try {
-          const emailContent = buffer.toString('utf8');
-          const { subject, from, body, senderName } = this.parseEmail(emailContent);
-          
-          // Check for engine-related keywords
-          const foundKeywords = this.findKeywords(subject + ' ' + body, keywords);
-          
-          if (foundKeywords.length > 0) {
-            console.log(`Engine-related email detected from ${from}`);
-            console.log(`Keywords found: ${foundKeywords.join(', ')}`);
-            
-            // Create case and generate response
-            const emailCase = await caseManager.createCase({
-              senderEmail: from,
-              senderName,
-              subject,
-              originalBody: body,
-              keywords: foundKeywords,
-              status: 'new',
-              followUpSent: false,
-              followUpAt: null,
-              responseBody: null,
-              attachmentUrl: null
-            });
-
-            // Generate and send AI response
-            await (aiResponder.generateAndSendResponse as (emailCase: EmailCase, accessToken: string) => Promise<any>)(emailCase, accessToken);
-            
-            // Mark email as seen
-            this.imap!.addFlags(seqno, ['\\Seen'], (err) => {
-              if (err) console.error('Error marking email as seen:', err);
-            });
-
-            // Update stats
-            const status = await storage.getSystemStatus();
-            if (status) {
-              await storage.updateSystemStatus({
-                emailsProcessed: (status.emailsProcessed || 0) + 1,
-                activeCases: (await storage.getAllEmailCases()).filter(c => c.status !== 'completed').length
-              });
-            }
-          }
-        } catch (error) {
-          console.error('Error processing email:', error);
-        }
-      });
-    });
-
-    fetch.once('error', (err: Error) => {
-      console.error('Fetch error:', err);
-    });
-  }
-
-  private parseEmail(content: string): { subject: string; from: string; body: string; senderName: string } {
-    const lines = content.split('\n');
-    let subject = '';
-    let from = '';
-    let senderName = '';
-    let bodyStart = false;
-    let body = '';
-
-    for (const line of lines) {
-      if (line.startsWith('Subject: ')) {
-        subject = line.substring(9).trim();
-      } else if (line.startsWith('From: ')) {
-        from = line.substring(6).trim();
-        // Extract email and name from "Name <email>" format
-        const emailMatch = from.match(/<(.*)>/);
-        if (emailMatch && emailMatch[1]) {
-          senderName = from.substring(0, emailMatch.index).trim().replace(/"/g, '');
-          from = emailMatch[1];
-        } else {
-          senderName = from.split('@')[0]; // Use part before @ as name if no explicit name
-        }
-      } else if (line.trim() === '' && !bodyStart) {
-        bodyStart = true;
-      } else if (bodyStart) {
-        body += line + '\n';
-      }
-    }
-
-    return { subject, from, body: body.trim(), senderName };
-  }
-
-  private findKeywords(text: string, keywords: string[]): string[] {
+  private extractKeywords(text: string, keywords: string[]): string[] {
+    const foundKeywords: string[] = [];
     const lowerText = text.toLowerCase();
-    if (lowerText.includes("engine")) {
-      return ["engine"];
-    }
-    return [];
-  }
-
-  private startPeriodicCheck() {
-    // Check for follow-ups every 2 hours
-    this.checkInterval = setInterval(async () => {
-      await this.checkForFollowUps();
-    }, 2 * 60 * 60 * 1000); // 2 hours
-  }
-
-  private async checkForFollowUps() {
-    try {
-      const cases = await storage.getAllEmailCases();
-      const now = new Date();
-      
-      for (const emailCase of cases) {
-        if (emailCase.status === 'responded' && 
-            !emailCase.followUpSent && 
-            emailCase.followUpAt && 
-            now >= emailCase.followUpAt) {
-          
-          console.log(`Sending follow-up for case ${emailCase.caseNumber}`);
-          await aiResponder.sendFollowUp(emailCase);
-        }
+    
+    for (const keyword of keywords) {
+      const lowerKeyword = keyword.toLowerCase().trim();
+      if (lowerKeyword && lowerText.includes(lowerKeyword)) {
+        foundKeywords.push(keyword);
       }
-    } catch (error) {
-      console.error('Error checking for follow-ups:', error);
     }
-  }
-
-  async stop() {
-    try {
-      this.isRunning = false;
-      
-      if (this.checkInterval) {
-        clearInterval(this.checkInterval);
-        this.checkInterval = null;
-      }
-
-      if (this.imap) {
-        this.imap.end();
-        this.imap = null;
-      }
-
-      await storage.updateSystemStatus({
-        emailMonitorActive: false
-      });
-
-      console.log('Email monitor stopped');
-    } catch (error) {
-      console.error('Error stopping email monitor:', error);
-    }
-  }
-
-  getStatus() {
-    return {
-      isRunning: this.isRunning,
-      hasConnection: this.imap !== null
-    };
+    
+    return Array.from(new Set(foundKeywords)); // Remove duplicates
   }
 }
 

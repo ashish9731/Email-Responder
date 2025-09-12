@@ -11,6 +11,7 @@
     "forceConsistentCasingInFileNames": true,
     "moduleResolution": "node",
     "noEmit": false,
+    "allowImportingTsExtensions": false,
     "jsx": "react-jsx",
     "baseUrl": ".",
     "paths": {

@@ -7,8 +7,6 @@ import Dashboard from "@/pages/dashboard";
 import Configuration from "@/pages/configuration";
 import EmailMonitorPage from "@/pages/email-monitor";
 import CaseManagement from "@/pages/case-management";
-import OneDriveFiles from "@/pages/onedrive-files";
-import Analytics from "@/pages/analytics";
 import NotFound from "@/pages/not-found";
 
 function Router() {
@@ -18,8 +16,6 @@ function Router() {
       <Route path="/configuration" component={Configuration} />
       <Route path="/email-monitor" component={EmailMonitorPage} />
       <Route path="/case-management" component={CaseManagement} />
-      <Route path="/onedrive-files" component={OneDriveFiles} />
-      <Route path="/analytics" component={Analytics} />
       <Route component={NotFound} />
     </Switch>
   );

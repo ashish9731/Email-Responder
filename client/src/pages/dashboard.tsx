@@ -4,23 +4,12 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import Sidebar from "@/components/Sidebar";
 import StatusCard from "@/components/StatusCard";
-import EmailMonitor from "@/components/EmailMonitor";
-import SystemControls from "@/components/SystemControls";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Plus, Filter, Mail } from "lucide-react";
+import { Mail } from "lucide-react";
 
 export default function Dashboard() {
   const { toast } = useToast();
-  const [newKeyword, setNewKeyword] = useState("");
-  const [manualCreds, setManualCreds] = useState({
-    clientId: "",
-    clientSecret: "",
-    tenantId: ""
-  });
 
   // Fetch system status
   const { data: systemStatus, isLoading: statusLoading } = useQuery({
@@ -35,90 +24,8 @@ export default function Dashboard() {
 
   // Fetch recent cases
   const { data: cases = [] } = useQuery({
-    queryKey: ["/api/cases"],
+    queryKey: ["/api/email-cases"],
   }) as { data: any[] };
-
-  // Fetch Microsoft connection status
-  const { data: microsoftStatus } = useQuery({
-    queryKey: ["/api/microsoft/status"],
-    refetchInterval: 30000, // Update every 30 seconds
-  }) as { data: any };
-
-  // Add keyword mutation
-  const addKeywordMutation = useMutation({
-    mutationFn: async (keyword: string) => {
-      const response = await apiRequest("POST", "/api/keywords", { keyword });
-      return response.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/keywords"] });
-      setNewKeyword("");
-      toast({ title: "Keyword added successfully" });
-    },
-    onError: () => {
-      toast({ title: "Failed to add keyword", variant: "destructive" });
-    },
-  });
-
-  // Remove keyword mutation
-  const removeKeywordMutation = useMutation({
-    mutationFn: async (id: string) => {
-      await apiRequest("DELETE", `/api/keywords/${id}`);
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/keywords"] });
-      toast({ title: "Keyword removed successfully" });
-    },
-    onError: () => {
-      toast({ title: "Failed to remove keyword", variant: "destructive" });
-    },
-  });
-
-  // Save manual Microsoft credentials mutation
-  const saveManualCredsMutation = useMutation({
-    mutationFn: async (creds: typeof manualCreds) => {
-      const response = await apiRequest("POST", "/api/microsoft/manual", creds);
-      return response.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/system/status"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/microsoft/status"] });
-      toast({ title: "Microsoft credentials saved successfully" });
-      setManualCreds({ clientId: "", clientSecret: "", tenantId: "" });
-    },
-    onError: (error: any) => {
-      console.error("Failed to save Microsoft credentials:", error);
-      toast({ 
-        title: "Failed to save Microsoft credentials", 
-        description: error?.message || "Please check your credentials and try again",
-        variant: "destructive" 
-      });
-    },
-  });
-
-  const handleAddKeyword = () => {
-    if (newKeyword.trim()) {
-      addKeywordMutation.mutate(newKeyword.trim());
-    }
-  };
-
-  const handleRemoveKeyword = (id: string) => {
-    removeKeywordMutation.mutate(id);
-  };
-
-  const handleSaveManualCreds = () => {
-    if (manualCreds.clientId && manualCreds.clientSecret && manualCreds.tenantId) {
-      saveManualCredsMutation.mutate(manualCreds);
-    } else {
-      toast({ title: "Please fill in all credential fields", variant: "destructive" });
-    }
-  };
-
-  const formatUptime = (seconds: number) => {
-    const hours = Math.floor(seconds / 3600);
-    const minutes = Math.floor((seconds % 3600) / 60);
-    return `${hours}h ${minutes}m uptime`;
-  };
 
   return (
     <div className="flex h-screen overflow-hidden bg-background">
@@ -139,12 +46,6 @@ export default function Dashboard() {
                   {systemStatus?.emailMonitorActive ? 'System Active' : 'System Inactive'}
                 </span>
               </div>
-              {systemStatus?.uptime && (
-                <div className="text-sm text-muted-foreground">
-                  <span className="mr-1">🕐</span>
-                  {formatUptime(systemStatus.uptime)}
-                </div>
-              )}
             </div>
           </div>
         </header>
@@ -156,101 +57,55 @@ export default function Dashboard() {
               title="Emails Processed"
               value={systemStatus?.emailsProcessed?.toString() || "0"}
               icon="📧"
-              trend="+12%"
-              trendLabel="from last week"
               data-testid="card-emails-processed"
             />
             <StatusCard
               title="Active Cases"
               value={systemStatus?.caseStats?.active?.toString() || "0"}
               icon="📁"
-              trend={`${systemStatus?.caseStats?.pendingFollowUps || 0} pending`}
-              trendLabel="follow-ups"
               data-testid="card-active-cases"
             />
             <StatusCard
               title="Response Rate"
               value={systemStatus?.caseStats?.responseRate || "0%"}
               icon="✅"
-              trend="Excellent"
-              trendLabel="performance"
               data-testid="card-response-rate"
             />
             <StatusCard
-              title="OneDrive Storage"
-              value={systemStatus?.storageUsed || "0GB"}
-              icon="☁️"
-              trend="of 15GB used"
-              trendLabel=""
-              data-testid="card-storage-used"
+              title="Keywords Configured"
+              value={keywords.length.toString()}
+              icon="🔑"
+              data-testid="card-keywords-configured"
             />
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            
-            
-          </div>
-
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <div className="lg:col-span-2">
-              <EmailMonitor cases={cases.slice(0, 5)} />
-            </div>
-            <SystemControls systemStatus={systemStatus} />
-          </div>
-
-          {/* Keywords Configuration */}
+          {/* Recent Activity */}
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center text-foreground">
-                <Filter className="mr-2 h-5 w-5 text-primary" />
-                Engine Keywords Configuration
+                <Mail className="mr-2 h-5 w-5 text-primary" />
+                Recent Activity
               </CardTitle>
-              <p className="text-sm text-muted-foreground">Configure trigger keywords for automatic email responses</p>
+              <p className="text-sm text-muted-foreground">Latest email cases and system activity</p>
             </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <div>
-                  <Label className="text-sm font-medium mb-3 block">Active Keywords</Label>
-                  <div className="space-y-2">
-                    <div className="flex flex-wrap gap-2">
-                      {keywords.map((keyword: any) => (
-                        <Badge 
-                          key={keyword.id} 
-                          variant="secondary" 
-                          className="cursor-pointer hover:bg-destructive hover:text-destructive-foreground transition-colors"
-                          onClick={() => handleRemoveKeyword(keyword.id)}
-                          data-testid={`badge-keyword-${keyword.id}`}
-                        >
-                          {keyword.keyword} ✕
-                        </Badge>
-                      ))}
+              {cases.length > 0 ? (
+                <div className="space-y-3">
+                  {cases.slice(0, 5).map((caseItem: any) => (
+                    <div key={caseItem.id} className="flex items-center justify-between p-3 bg-muted rounded-lg">
+                      <div>
+                        <p className="font-medium text-sm">{caseItem.subject}</p>
+                        <p className="text-xs text-muted-foreground">{caseItem.status}</p>
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        {new Date(caseItem.createdAt).toLocaleDateString()}
+                      </div>
                     </div>
-                  </div>
+                  ))}
                 </div>
-                <div>
-                  <Label htmlFor="new-keyword" className="text-sm font-medium mb-3 block">Add New Keyword</Label>
-                  <div className="flex space-x-2">
-                    <Input
-                      id="new-keyword"
-                      value={newKeyword}
-                      onChange={(e) => setNewKeyword(e.target.value)}
-                      placeholder="Enter new keyword..."
-                      onKeyDown={(e) => e.key === 'Enter' && handleAddKeyword()}
-                      data-testid="input-new-keyword"
-                    />
-                    <Button 
-                      onClick={handleAddKeyword}
-                      disabled={!newKeyword.trim() || addKeywordMutation.isPending}
-                      data-testid="button-add-keyword"
-                    >
-                      <Plus className="h-4 w-4" />
-                    </Button>
-                  </div>
-                  <p className="text-xs text-muted-foreground mt-2">
-                    Keywords are case-insensitive and will trigger automatic responses
-                  </p>
-                </div>
-              </div>
+              ) : (
+                <p className="text-center text-muted-foreground py-8">No recent activity</p>
+              )}
             </CardContent>
           </Card>
         </div>

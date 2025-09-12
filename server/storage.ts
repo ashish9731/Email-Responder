@@ -1,75 +1,50 @@
-import { 
-  type Configuration, 
-  type InsertConfiguration,
-  type EmailCase,
-  type InsertEmailCase,
-  type SystemStatus,
-  type InsertSystemStatus,
-  type Keyword,
-  type InsertKeyword,
-  type MicrosoftCredentials,
-  type InsertMicrosoftCredentials
-} from "@shared/schema";
-import { randomUUID } from "crypto";
+import { randomUUID } from 'crypto';
+import type {
+  Configuration,
+  EmailCase,
+  Keyword,
+  MicrosoftCredentials,
+  SystemStatus,
+  InsertConfiguration,
+  InsertEmailCase,
+  InsertKeyword,
+  InsertMicrosoftCredentials
+} from '@shared/schema';
 
-export interface IStorage {
-  // Configuration methods
-  getConfiguration(): Promise<Configuration | undefined>;
-  saveConfiguration(config: InsertConfiguration): Promise<Configuration>;
-  updateConfiguration(config: Partial<Configuration>): Promise<Configuration>;
+export class MemStorage {
+  private configurations = new Map<string, Configuration>();
+  private emailCases = new Map<string, EmailCase>();
+  private keywords = new Map<string, Keyword>();
+  private microsoftCredentials = new Map<string, MicrosoftCredentials>();
+  private systemStatuses = new Map<string, SystemStatus>();
   
-  // Email case methods
-  createEmailCase(emailCase: InsertEmailCase): Promise<EmailCase>;
-  getEmailCase(id: string): Promise<EmailCase | undefined>;
-  getEmailCaseByNumber(caseNumber: string): Promise<EmailCase | undefined>;
-  getAllEmailCases(): Promise<EmailCase[]>;
-  updateEmailCase(id: string, updates: Partial<EmailCase>): Promise<EmailCase>;
-  
-  // System status methods
-  getSystemStatus(): Promise<SystemStatus | undefined>;
-  updateSystemStatus(status: Partial<SystemStatus>): Promise<SystemStatus>;
-  
-  // Keywords methods
-  getAllKeywords(): Promise<Keyword[]>;
-  addKeyword(keyword: InsertKeyword): Promise<Keyword>;
-  removeKeyword(id: string): Promise<void>;
-  getActiveKeywords(): Promise<string[]>;
-  
-  // Microsoft credentials methods
-  getMicrosoftCredentials(): Promise<MicrosoftCredentials | undefined>;
-  saveMicrosoftCredentials(credentials: InsertMicrosoftCredentials): Promise<MicrosoftCredentials>;
-  updateMicrosoftCredentials(credentials: Partial<MicrosoftCredentials>): Promise<MicrosoftCredentials>;
-  deleteMicrosoftCredentials(): Promise<void>;
-}
-
-export class MemStorage implements IStorage {
-  private configurations: Map<string, Configuration> = new Map();
-  private emailCases: Map<string, EmailCase> = new Map();
-  private systemStatuses: Map<string, SystemStatus> = new Map();
-  private keywords: Map<string, Keyword> = new Map();
-  private microsoftCredentials: Map<string, MicrosoftCredentials> = new Map();
   private currentConfigId: string | null = null;
   private currentStatusId: string | null = null;
   private currentMsCredId: string | null = null;
 
-  constructor() {
-    // Initialize system status
-    const statusId = randomUUID();
-    this.currentStatusId = statusId;
-    this.systemStatuses.set(statusId, {
-      id: statusId,
-      emailMonitorActive: false,
-      autoResponderActive: false,
-      outlookConnected: false,
-      onedriveConnected: false,
-      lastEmailCheck: null,
-      emailsProcessed: 0,
-      activeCases: 0,
-      responseRate: "0%",
-      storageUsed: "0GB",
-      uptime: 0,
-      lastUpdated: new Date(),
-    });
+  // Helper methods
+  private generateId(): string {
+    return Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+  }
+
+  private generateCaseNumber(): string {
+    const year = new Date().getFullYear();
+    const count = this.emailCases.size + 1;
+    return `VE-${year}-${String(count).padStart(3, '0')}`;
+  }
+
+  // Configuration methods
+  async saveConfiguration(config: InsertConfiguration): Promise<Configuration> {
+    const id = this.generateId();
+    const newConfig: Configuration = {
+      ...config,
+      id,
+      createdAt: new Date()
+    };
+    
+    this.configurations.set(id, newConfig);
+    this.currentConfigId = id;
+    return newConfig;
   }
 
   async getConfiguration(): Promise<Configuration | undefined> {
@@ -77,27 +52,7 @@ export class MemStorage implements IStorage {
     return this.configurations.get(this.currentConfigId);
   }
 
-  async saveConfiguration(config: InsertConfiguration): Promise<Configuration> {
-    const id = this.currentConfigId || randomUUID();
-    const configuration: Configuration = {
-      ...config,
-      id,
-      popServer: config.popServer || null,
-      popPort: config.popPort || null,
-      graphAppId: config.graphAppId || null,
-      graphClientSecret: config.graphClientSecret || null,
-      graphTenantId: config.graphTenantId || null,
-      openaiApiKey: config.openaiApiKey || null,
-      isActive: config.isActive || false,
-      createdAt: new Date(),
-    };
-    
-    this.configurations.set(id, configuration);
-    this.currentConfigId = id;
-    return configuration;
-  }
-
-  async updateConfiguration(config: Partial<Configuration>): Promise<Configuration> {
+  async updateConfiguration(updates: Partial<Configuration>): Promise<Configuration> {
     if (!this.currentConfigId) {
       throw new Error("No configuration exists to update");
     }
@@ -107,30 +62,47 @@ export class MemStorage implements IStorage {
       throw new Error("Configuration not found");
     }
     
-    const updated = { ...existing, ...config };
+    const updated = { ...existing, ...updates };
     this.configurations.set(this.currentConfigId, updated);
     return updated;
   }
 
+  // Email case methods
   async createEmailCase(emailCase: InsertEmailCase): Promise<EmailCase> {
-    const id = randomUUID();
-    const caseNumber = `VE-${new Date().getFullYear()}-${String(this.emailCases.size + 1).padStart(3, '0')}`;
+    const id = this.generateId();
+    const caseNumber = this.generateCaseNumber();
+    const now = new Date();
     
     const newCase: EmailCase = {
-      ...emailCase,
       id,
       caseNumber,
+      senderEmail: emailCase.senderEmail,
       senderName: emailCase.senderName || null,
-      responseBody: emailCase.responseBody || null,
-      attachmentUrl: emailCase.attachmentUrl || null,
-      followUpSent: emailCase.followUpSent || false,
-      followUpAt: emailCase.followUpAt || null,
-      createdAt: new Date(),
-      updatedAt: new Date(),
+      subject: emailCase.subject,
+      originalBody: emailCase.originalBody,
+      keywords: emailCase.keywords || [],
+      status: 'new',
+      responseBody: null,
+      attachmentUrl: null,
+      followUpSent: false,
+      followUpAt: null,
+      createdAt: now,
+      updatedAt: now
     };
     
     this.emailCases.set(id, newCase);
     return newCase;
+  }
+
+  async updateEmailCase(id: string, updates: Partial<EmailCase>): Promise<EmailCase> {
+    const existing = this.emailCases.get(id);
+    if (!existing) {
+      throw new Error("Email case not found");
+    }
+    
+    const updated = { ...existing, ...updates, updatedAt: new Date() };
+    this.emailCases.set(id, updated);
+    return updated;
   }
 
   async getEmailCase(id: string): Promise<EmailCase | undefined> {
@@ -147,17 +119,7 @@ export class MemStorage implements IStorage {
     );
   }
 
-  async updateEmailCase(id: string, updates: Partial<EmailCase>): Promise<EmailCase> {
-    const existing = this.emailCases.get(id);
-    if (!existing) {
-      throw new Error("Email case not found");
-    }
-    
-    const updated = { ...existing, ...updates, updatedAt: new Date() };
-    this.emailCases.set(id, updated);
-    return updated;
-  }
-
+  // System status methods
   async getSystemStatus(): Promise<SystemStatus | undefined> {
     if (!this.currentStatusId) return undefined;
     return this.systemStatuses.get(this.currentStatusId);
@@ -165,7 +127,17 @@ export class MemStorage implements IStorage {
 
   async updateSystemStatus(status: Partial<SystemStatus>): Promise<SystemStatus> {
     if (!this.currentStatusId) {
-      throw new Error("No system status exists to update");
+      const id = this.generateId();
+      const newStatus: SystemStatus = {
+        id,
+        emailMonitorActive: false,
+        outlookConnected: false,
+        onedriveConnected: false,
+        lastUpdated: new Date()
+      };
+      this.systemStatuses.set(id, { ...newStatus, ...status });
+      this.currentStatusId = id;
+      return this.systemStatuses.get(id)!;
     }
     
     const existing = this.systemStatuses.get(this.currentStatusId);
@@ -178,17 +150,18 @@ export class MemStorage implements IStorage {
     return updated;
   }
 
+  // Keyword methods
   async getAllKeywords(): Promise<Keyword[]> {
     return Array.from(this.keywords.values());
   }
 
   async addKeyword(keyword: InsertKeyword): Promise<Keyword> {
-    const id = randomUUID();
+    const id = this.generateId();
     const newKeyword: Keyword = {
       ...keyword,
       id,
       isActive: keyword.isActive !== undefined ? keyword.isActive : true,
-      createdAt: new Date(),
+      createdAt: new Date()
     };
     
     this.keywords.set(id, newKeyword);
@@ -205,25 +178,31 @@ export class MemStorage implements IStorage {
       .map(k => k.keyword);
   }
 
+  // Microsoft credentials methods
   async getMicrosoftCredentials(): Promise<MicrosoftCredentials | undefined> {
     if (!this.currentMsCredId) return undefined;
     return this.microsoftCredentials.get(this.currentMsCredId);
   }
 
   async saveMicrosoftCredentials(credentials: InsertMicrosoftCredentials): Promise<MicrosoftCredentials> {
-    const id = this.currentMsCredId || randomUUID();
-    const microsoftCreds: MicrosoftCredentials = {
-      ...credentials,
+    const id = this.generateId();
+    const now = new Date();
+    
+    const newCredentials: MicrosoftCredentials = {
       id,
-      tokenCache: (credentials.tokenCache || null) as string | null,
-      isActive: credentials.isActive !== undefined ? credentials.isActive : true,
-      createdAt: new Date(),
-      updatedAt: new Date(),
+      clientId: credentials.clientId,
+      clientSecret: credentials.clientSecret,
+      tenantId: credentials.tenantId,
+      tokenCache: null,
+      connectionType: credentials.connectionType,
+      isActive: true,
+      createdAt: now,
+      updatedAt: now
     };
     
-    this.microsoftCredentials.set(id, microsoftCreds);
+    this.microsoftCredentials.set(id, newCredentials);
     this.currentMsCredId = id;
-    return microsoftCreds;
+    return newCredentials;
   }
 
   async updateMicrosoftCredentials(credentials: Partial<MicrosoftCredentials>): Promise<MicrosoftCredentials> {
@@ -236,7 +215,7 @@ export class MemStorage implements IStorage {
       throw new Error("Microsoft credentials not found");
     }
     
-    const updated = { ...existing, ...credentials, tokenCache: credentials.tokenCache || existing.tokenCache, updatedAt: new Date() };
+    const updated = { ...existing, ...credentials, updatedAt: new Date() };
     this.microsoftCredentials.set(this.currentMsCredId, updated);
     return updated;
   }

@@ -1,25 +1,22 @@
-# Email Responder Application
+# AutoRespondMail - Email Response Automation
 
-A comprehensive email automation system that monitors incoming emails, detects engine-related queries using AI, and automatically generates personalized responses.
+A streamlined email automation tool that monitors your inbox and automatically responds to emails based on predefined keywords and AI-generated responses.
 
 ## Features
 
-- **Email Monitoring**: Monitors IMAP/SMTP email accounts for new messages
-- **AI-Powered Detection**: Uses OpenAI to identify engine-related queries
-- **Automated Responses**: Generates and sends personalized email responses
-- **Case Management**: Tracks and manages customer inquiries as cases
-- **Microsoft 365 Integration**: Full integration with Outlook and OneDrive
-- **Keyword Detection**: Configurable keyword-based email filtering
-- **Dashboard**: Real-time monitoring and analytics dashboard
+- **Keyword-based Email Monitoring**: Monitor incoming emails for specific keywords
+- **AI-Powered Responses**: Generate contextual responses using OpenAI GPT-3.5-turbo
+- **Microsoft 365 Integration**: Connect with Outlook and OneDrive
+- **Email Case Management**: Track and manage automated responses
+- **Real-time Monitoring**: Continuous inbox monitoring with status tracking
 
 ## Tech Stack
 
-- **Backend**: Node.js, Express, TypeScript
-- **Frontend**: React, TypeScript, TailwindCSS, Vite
-- **Database**: In-memory storage (configurable for production)
-- **AI**: OpenAI GPT models
-- **Email**: IMAP/SMTP, Microsoft Graph API
-- **Deployment**: Vercel (serverless functions)
+- **Frontend**: React with TypeScript, Tailwind CSS
+- **Backend**: Node.js with Express, TypeScript
+- **Database**: In-memory storage (expandable to database)
+- **Email Service**: Microsoft Graph API
+- **Deployment**: Vercel
 
 ## Quick Setup
 
@@ -34,23 +31,17 @@ cp .env.example .env
 ### 2. Required Environment Variables
 
 ```bash
-# Microsoft Azure AD Configuration
+# Server Configuration
+PORT=3001
+NODE_ENV=production
+
+# Microsoft 365 Configuration (for OAuth)
 MICROSOFT_CLIENT_ID=your_azure_client_id
 MICROSOFT_CLIENT_SECRET=your_azure_client_secret
 MICROSOFT_TENANT_ID=your_azure_tenant_id
 
-# Database Configuration
-DATABASE_URL=your_database_url (optional - defaults to in-memory)
-
-# OpenAI Configuration
+# OpenAI Configuration (for GPT-3.5-turbo responses)
 OPENAI_API_KEY=your_openai_api_key
-
-# Session Configuration
-SESSION_SECRET=your_random_session_secret
-
-# Environment
-NODE_ENV=production
-PORT=5000
 ```
 
 ### 3. Getting Microsoft Azure Credentials
