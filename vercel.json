@@ -6,7 +6,7 @@
     {
       "src": "client/build.sh",
       "use": "@vercel/static-build",
-      "config": { "distDir": "client/dist/public" }
+      "config": { "distDir": "dist/public" }
     },
     {
       "src": "dist/index.js",
