@@ -1,9 +1,6 @@
-import express from 'express';
-import cors from 'cors';
-import router from './routes';
-import dotenv from 'dotenv';
-
-dotenv.config();
+const express = require('express');
+const cors = require('cors');
+const path = require('path');
 
 const app = express();
 
@@ -11,8 +8,11 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+// Import routes
+const routes = require('../dist/server/routes.js');
+
 // Routes
-app.use('/api', router);
+app.use('/api', routes.default || routes);
 
 // Health check endpoint
 app.get('/health', (req, res) => {
@@ -20,10 +20,9 @@ app.get('/health', (req, res) => {
 });
 
 // Error handling middleware
-app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+app.use((err, req, res, next) => {
   console.error(err.stack);
   res.status(500).json({ error: 'Something went wrong!' });
 });
 
-// Export for Vercel serverless
-export default app;
+module.exports = app;
