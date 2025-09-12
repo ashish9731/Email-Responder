@@ -1,4 +1,6 @@
 import { randomUUID } from 'crypto';
+import fs from 'fs';
+import path from 'path';
 import type {
   Configuration,
   EmailCase,
@@ -11,7 +13,10 @@ import type {
   InsertMicrosoftCredentials
 } from '@shared/schema';
 
-export class MemStorage {
+export class PersistentStorage {
+  private dataDir = path.join(process.cwd(), 'data');
+  private dataFile = path.join(this.dataDir, 'storage.json');
+  
   private configurations = new Map<string, Configuration>();
   private emailCases = new Map<string, EmailCase>();
   private keywords = new Map<string, Keyword>();
@@ -21,6 +26,56 @@ export class MemStorage {
   private currentConfigId: string | null = null;
   private currentStatusId: string | null = null;
   private currentMsCredId: string | null = null;
+
+  constructor() {
+    this.ensureDataDir();
+    this.loadData();
+  }
+
+  private ensureDataDir() {
+    if (!fs.existsSync(this.dataDir)) {
+      fs.mkdirSync(this.dataDir, { recursive: true });
+    }
+  }
+
+  private loadData() {
+    try {
+      if (fs.existsSync(this.dataFile)) {
+        const data = JSON.parse(fs.readFileSync(this.dataFile, 'utf-8'));
+        
+        this.configurations = new Map(data.configurations || []);
+        this.emailCases = new Map(data.emailCases || []);
+        this.keywords = new Map(data.keywords || []);
+        this.microsoftCredentials = new Map(data.microsoftCredentials || []);
+        this.systemStatuses = new Map(data.systemStatuses || []);
+        
+        this.currentConfigId = data.currentConfigId || null;
+        this.currentStatusId = data.currentStatusId || null;
+        this.currentMsCredId = data.currentMsCredId || null;
+      }
+    } catch (error) {
+      console.error('Error loading data:', error);
+    }
+  }
+
+  private saveData() {
+    try {
+      const data = {
+        configurations: Array.from(this.configurations.entries()),
+        emailCases: Array.from(this.emailCases.entries()),
+        keywords: Array.from(this.keywords.entries()),
+        microsoftCredentials: Array.from(this.microsoftCredentials.entries()),
+        systemStatuses: Array.from(this.systemStatuses.entries()),
+        currentConfigId: this.currentConfigId,
+        currentStatusId: this.currentStatusId,
+        currentMsCredId: this.currentMsCredId
+      };
+      
+      fs.writeFileSync(this.dataFile, JSON.stringify(data, null, 2));
+    } catch (error) {
+      console.error('Error saving data:', error);
+    }
+  }
 
   // Helper methods
   private generateId(): string {
@@ -44,6 +99,7 @@ export class MemStorage {
     
     this.configurations.set(id, newConfig);
     this.currentConfigId = id;
+    this.saveData();
     return newConfig;
   }
 
@@ -64,6 +120,7 @@ export class MemStorage {
     
     const updated = { ...existing, ...updates };
     this.configurations.set(this.currentConfigId, updated);
+    this.saveData();
     return updated;
   }
 
@@ -91,6 +148,7 @@ export class MemStorage {
     };
     
     this.emailCases.set(id, newCase);
+    this.saveData();
     return newCase;
   }
 
@@ -102,6 +160,7 @@ export class MemStorage {
     
     const updated = { ...existing, ...updates, updatedAt: new Date() };
     this.emailCases.set(id, updated);
+    this.saveData();
     return updated;
   }
 
@@ -137,6 +196,7 @@ export class MemStorage {
       };
       this.systemStatuses.set(id, { ...newStatus, ...status });
       this.currentStatusId = id;
+      this.saveData();
       return this.systemStatuses.get(id)!;
     }
     
@@ -147,6 +207,7 @@ export class MemStorage {
     
     const updated = { ...existing, ...status, lastUpdated: new Date() };
     this.systemStatuses.set(this.currentStatusId, updated);
+    this.saveData();
     return updated;
   }
 
@@ -165,11 +226,13 @@ export class MemStorage {
     };
     
     this.keywords.set(id, newKeyword);
+    this.saveData();
     return newKeyword;
   }
 
   async removeKeyword(id: string): Promise<void> {
     this.keywords.delete(id);
+    this.saveData();
   }
 
   async getActiveKeywords(): Promise<string[]> {
@@ -202,6 +265,7 @@ export class MemStorage {
     
     this.microsoftCredentials.set(id, newCredentials);
     this.currentMsCredId = id;
+    this.saveData();
     return newCredentials;
   }
 
@@ -217,6 +281,7 @@ export class MemStorage {
     
     const updated = { ...existing, ...credentials, updatedAt: new Date() };
     this.microsoftCredentials.set(this.currentMsCredId, updated);
+    this.saveData();
     return updated;
   }
 
@@ -224,8 +289,9 @@ export class MemStorage {
     if (this.currentMsCredId) {
       this.microsoftCredentials.delete(this.currentMsCredId);
       this.currentMsCredId = null;
+      this.saveData();
     }
   }
 }
 
-export const storage = new MemStorage();
+export const storage = new PersistentStorage();

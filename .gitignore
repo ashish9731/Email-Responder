@@ -110,3 +110,8 @@ Thumbs.db
 
 # Vite
 .vite
+
+# Application data
+/data/
+data/
+storage.json
