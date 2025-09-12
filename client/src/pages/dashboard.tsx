@@ -5,7 +5,6 @@ import { useToast } from "@/hooks/use-toast";
 import Sidebar from "@/components/Sidebar";
 import StatusCard from "@/components/StatusCard";
 import EmailMonitor from "@/components/EmailMonitor";
-import ServerConfig from "@/components/ServerConfig";
 import SystemControls from "@/components/SystemControls";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -188,140 +187,8 @@ export default function Dashboard() {
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <ServerConfig />
             
-            {/* Microsoft Graph API Card */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center text-foreground">
-                  <span className="mr-2">🔗</span>
-                  Microsoft Connections
-                </CardTitle>
-                <p className="text-sm text-muted-foreground">Choose automatic or manual setup</p>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                {/* Automatic Connection Section */}
-                <div className="space-y-4">
-                  <div className="flex items-center space-x-2">
-                    <span className="text-sm font-semibold text-foreground">🚀 One-Click Setup</span>
-                    <Badge variant="secondary" className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300">
-                      Recommended
-                    </Badge>
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <Button 
-                      className="w-full"
-                      onClick={() => window.open('/integration/outlook', '_blank')}
-                      data-testid="button-connect-outlook-auto"
-                    >
-                      <Mail className="mr-2 h-4 w-4" />
-                      Connect Outlook
-                    </Button>
-                    <Button 
-                      variant="outline"
-                      className="w-full"
-                      onClick={() => window.open('/integration/onedrive', '_blank')}
-                      data-testid="button-connect-onedrive-auto"
-                    >
-                      ☁️ Connect OneDrive
-                    </Button>
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    Secure OAuth2 authentication handled automatically by Replit
-                  </p>
-                </div>
-
-                <div className="flex items-center">
-                  <div className="flex-1 border-t border-border"></div>
-                  <span className="px-3 text-xs text-muted-foreground">OR</span>
-                  <div className="flex-1 border-t border-border"></div>
-                </div>
-
-                {/* Manual Connection Section */}
-                <div className="space-y-4">
-                  <div className="flex items-center space-x-2">
-                    <span className="text-sm font-semibold text-foreground">⚙️ Manual Setup</span>
-                  </div>
-                  <div className="grid grid-cols-1 gap-3">
-                    <div>
-                      <Label htmlFor="app-id">Application ID</Label>
-                      <Input 
-                        id="app-id"
-                        value={manualCreds.clientId}
-                        onChange={(e) => setManualCreds({ ...manualCreds, clientId: e.target.value })}
-                        placeholder="Enter Application ID" 
-                        data-testid="input-app-id"
-                      />
-                    </div>
-                    <div>
-                      <Label htmlFor="client-secret">Client Secret</Label>
-                      <Input 
-                        id="client-secret"
-                        type="password"
-                        value={manualCreds.clientSecret}
-                        onChange={(e) => setManualCreds({ ...manualCreds, clientSecret: e.target.value })}
-                        placeholder="Enter Client Secret"
-                        data-testid="input-client-secret"
-                      />
-                    </div>
-                    <div>
-                      <Label htmlFor="tenant-id">Tenant ID</Label>
-                      <Input 
-                        id="tenant-id"
-                        value={manualCreds.tenantId}
-                        onChange={(e) => setManualCreds({ ...manualCreds, tenantId: e.target.value })}
-                        placeholder="Enter Tenant ID"
-                        data-testid="input-tenant-id"
-                      />
-                    </div>
-                    <Button 
-                      variant="secondary" 
-                      className="w-full"
-                      onClick={handleSaveManualCreds}
-                      disabled={saveManualCredsMutation.isPending}
-                      data-testid="button-save-manual-creds"
-                    >
-                      💾 {saveManualCredsMutation.isPending ? "Saving..." : "Save Manual Credentials"}
-                    </Button>
-                  </div>
-                </div>
-
-                <div className="pt-4 border-t border-border">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
-                      <div>
-                        <p className="text-sm font-medium text-foreground">Outlook</p>
-                        <p className="text-xs text-muted-foreground">Email sending</p>
-                        {microsoftStatus?.outlook?.type && microsoftStatus.outlook.type !== 'none' && (
-                          <p className="text-xs text-blue-600 dark:text-blue-400">via {microsoftStatus.outlook.type}</p>
-                        )}
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <div className={`w-2 h-2 rounded-full ${microsoftStatus?.outlook?.connected ? 'bg-green-500' : 'bg-red-500'}`}></div>
-                        <span className={`text-xs font-medium ${microsoftStatus?.outlook?.connected ? 'text-green-600' : 'text-red-600'}`}>
-                          {microsoftStatus?.outlook?.connected ? 'Connected' : 'Disconnected'}
-                        </span>
-                      </div>
-                    </div>
-                    <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
-                      <div>
-                        <p className="text-sm font-medium text-foreground">OneDrive</p>
-                        <p className="text-xs text-muted-foreground">File storage</p>
-                        {microsoftStatus?.onedrive?.type && microsoftStatus.onedrive.type !== 'none' && (
-                          <p className="text-xs text-blue-600 dark:text-blue-400">via {microsoftStatus.onedrive.type}</p>
-                        )}
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <div className={`w-2 h-2 rounded-full ${microsoftStatus?.onedrive?.connected ? 'bg-green-500' : 'bg-red-500'}`}></div>
-                        <span className={`text-xs font-medium ${microsoftStatus?.onedrive?.connected ? 'text-green-600' : 'text-red-600'}`}>
-                          {microsoftStatus?.onedrive?.connected ? 'Connected' : 'Disconnected'}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+            
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

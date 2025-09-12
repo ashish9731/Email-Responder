@@ -122,29 +122,6 @@ export default function Sidebar() {
         </Link>
       </nav>
       
-      <div className="p-4 border-t border-border">
-        <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
-          <div className="flex items-center space-x-3">
-            <div className="w-8 h-8 bg-primary rounded-full flex items-center justify-center">
-              <span className="text-xs font-semibold text-primary-foreground">JD</span>
-            </div>
-            <div>
-              <p className="text-sm font-medium text-foreground">John Doe</p>
-              <p className="text-xs text-muted-foreground">Admin</p>
-            </div>
-          </div>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={handleLogout}
-            disabled={logoutMutation.isPending}
-            className="text-muted-foreground hover:text-destructive transition-colors"
-            data-testid="button-logout"
-          >
-            <LogOut className="h-4 w-4" />
-          </Button>
-        </div>
-      </div>
     </aside>
   );
 }
