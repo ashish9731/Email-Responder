@@ -1,16 +1,26 @@
 {
   "version": 2,
   "installCommand": "npm install",
-  "buildCommand": "npm run build:client",
-  "outputDirectory": "dist/public",
-  "rewrites": [
+  "buildCommand": "npm run build",
+  "builds": [
     {
-      "source": "/api/(.*)",
-      "destination": "/server/index.ts"
+      "src": "client/index.html",
+      "use": "@vercel/static-build",
+      "config": { "distDir": "dist/public" }
     },
     {
-      "source": "/(.*)",
-      "destination": "/server/index.ts"
+      "src": "server/index.ts",
+      "use": "@vercel/node"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/api/(.*)",
+      "dest": "server/index.ts"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "client/index.html"
     }
   ]
 }
