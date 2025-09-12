@@ -3,9 +3,9 @@ import * as msal from '@azure/msal-node';
 // MSAL configuration with graceful fallback
 const msalConfig = {
   auth: {
-    clientId: process.env.MICROSOFT_CLIENT_ID || 'demo-client-id',
-    authority: `https://login.microsoftonline.com/${process.env.MICROSOFT_TENANT_ID || 'common'}`,
-    clientSecret: process.env.MICROSOFT_CLIENT_SECRET || 'demo-secret',
+    clientId: process.env.MICROSOFT_CLIENT_ID,
+    authority: `https://login.microsoftonline.com/${process.env.MICROSOFT_TENANT_ID}`,
+    clientSecret: process.env.MICROSOFT_CLIENT_SECRET,
   },
   system: {
     loggerOptions: {

@@ -148,60 +148,7 @@ export default function Configuration() {
                   </div>
                 </div>
 
-                <div className="flex items-center">
-                  <div className="flex-1 border-t border-border"></div>
-                  <span className="px-3 text-xs text-muted-foreground">OR</span>
-                  <div className="flex-1 border-t border-border"></div>
-                </div>
 
-                {/* Manual Connection Section */}
-                <div className="space-y-4">
-                  <div className="flex items-center space-x-2">
-                    <span className="text-sm font-semibold text-foreground">⚙️ Manual Setup</span>
-                  </div>
-                  <div className="grid grid-cols-1 gap-3">
-                    <div>
-                      <Label htmlFor="app-id">Application ID</Label>
-                      <Input 
-                        id="app-id"
-                        value={manualCreds.clientId}
-                        onChange={(e) => setManualCreds({ ...manualCreds, clientId: e.target.value })}
-                        placeholder="Enter Application ID" 
-                        data-testid="input-app-id"
-                      />
-                    </div>
-                    <div>
-                      <Label htmlFor="client-secret">Client Secret</Label>
-                      <Input 
-                        id="client-secret"
-                        type="password"
-                        value={manualCreds.clientSecret}
-                        onChange={(e) => setManualCreds({ ...manualCreds, clientSecret: e.target.value })}
-                        placeholder="Enter Client Secret"
-                        data-testid="input-client-secret"
-                      />
-                    </div>
-                    <div>
-                      <Label htmlFor="tenant-id">Tenant ID</Label>
-                      <Input 
-                        id="tenant-id"
-                        value={manualCreds.tenantId}
-                        onChange={(e) => setManualCreds({ ...manualCreds, tenantId: e.target.value })}
-                        placeholder="Enter Tenant ID"
-                        data-testid="input-tenant-id"
-                      />
-                    </div>
-                    <Button 
-                      variant="secondary" 
-                      className="w-full"
-                      onClick={handleSaveManualCreds}
-                      disabled={saveManualCredsMutation.isPending}
-                      data-testid="button-save-manual-creds"
-                    >
-                      💾 {saveManualCredsMutation.isPending ? "Saving..." : "Save Manual Credentials"}
-                    </Button>
-                  </div>
-                </div>
               </CardContent>
             </Card>
           </div>
