@@ -1,6 +1,5 @@
-const express = require('express');
-const cors = require('cors');
-const path = require('path');
+import express from 'express';
+import cors from 'cors';
 
 const app = express();
 
@@ -8,11 +7,11 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// Import routes
-const routes = require('../dist/server/routes.js');
+// Import routes - using direct import
+import routes from '../dist/server/routes.js';
 
 // Routes
-app.use('/api', routes.default || routes);
+app.use('/api', routes);
 
 // Health check endpoint
 app.get('/health', (req, res) => {
@@ -25,4 +24,4 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: 'Something went wrong!' });
 });
 
-module.exports = app;
+export default app;
