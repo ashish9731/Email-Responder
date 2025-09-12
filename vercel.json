@@ -9,18 +9,18 @@
       "config": { "distDir": "dist/public" }
     },
     {
-      "src": "server/index.ts",
+      "src": "dist/index.js",
       "use": "@vercel/node"
     }
   ],
   "routes": [
     {
       "src": "/api/(.*)",
-      "dest": "server/index.ts"
+      "dest": "dist/index.js"
     },
     {
       "src": "/(.*)",
-      "dest": "client/index.html"
+      "dest": "dist/public/index.html"
     }
   ]
 }
