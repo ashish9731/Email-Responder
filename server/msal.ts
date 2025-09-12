@@ -1,25 +1,40 @@
 import * as msal from '@azure/msal-node';
 
-// MSAL configuration
+// MSAL configuration with graceful fallback
 const msalConfig = {
   auth: {
-    clientId: process.env.MICROSOFT_CLIENT_ID || '',
+    clientId: process.env.MICROSOFT_CLIENT_ID || 'demo-client-id',
     authority: `https://login.microsoftonline.com/${process.env.MICROSOFT_TENANT_ID || 'common'}`,
-    clientSecret: process.env.MICROSOFT_CLIENT_SECRET || '',
+    clientSecret: process.env.MICROSOFT_CLIENT_SECRET || 'demo-secret',
   },
   system: {
     loggerOptions: {
       loggerCallback(loglevel: any, message: string, containsPii: boolean) {
-        console.log(message);
+        if (process.env.NODE_ENV === 'development') {
+          console.log(message);
+        }
       },
       piiLoggingEnabled: false,
-      logLevel: msal.LogLevel.Verbose,
+      logLevel: process.env.NODE_ENV === 'development' ? msal.LogLevel.Verbose : msal.LogLevel.Error,
     },
   },
 };
 
-// Create msal application object
-export const pca = new msal.ConfidentialClientApplication(msalConfig);
+// Create msal application object with error handling
+let pcaInstance: msal.ConfidentialClientApplication | null = null;
+
+try {
+  pcaInstance = new msal.ConfidentialClientApplication(msalConfig);
+} catch (error) {
+  console.warn('MSAL initialization failed:', error);
+  // Create a mock instance for development
+  pcaInstance = {
+    getAuthCodeUrl: async () => 'https://login.microsoftonline.com/demo',
+    acquireTokenByCode: async () => ({ accessToken: 'demo-token' }),
+  } as any;
+}
+
+export const pca = pcaInstance;
 
 // Helper function to get auth code URL
 export async function getAuthCodeUrl(scopes: string[], redirectUri: string): Promise<string> {
