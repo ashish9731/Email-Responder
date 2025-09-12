@@ -1,4 +1,4 @@
-import * as Imap from 'node-imap';
+import Imap from 'node-imap';
 import { storage } from '../storage';
 import { aiResponder } from './aiResponder';
 import * as msalModule from '../msal';
