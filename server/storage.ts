@@ -1,6 +1,4 @@
 import { randomUUID } from 'crypto';
-import fs from 'fs';
-import path from 'path';
 import type {
   Configuration,
   EmailCase,
@@ -14,9 +12,6 @@ import type {
 } from '@shared/schema';
 
 export class PersistentStorage {
-  private dataDir = path.join(process.cwd(), 'data');
-  private dataFile = path.join(this.dataDir, 'storage.json');
-  
   private configurations = new Map<string, Configuration>();
   private emailCases = new Map<string, EmailCase>();
   private keywords = new Map<string, Keyword>();
@@ -28,20 +23,14 @@ export class PersistentStorage {
   private currentMsCredId: string | null = null;
 
   constructor() {
-    this.ensureDataDir();
-    this.loadData();
+    this.loadFromEnvironment();
   }
 
-  private ensureDataDir() {
-    if (!fs.existsSync(this.dataDir)) {
-      fs.mkdirSync(this.dataDir, { recursive: true });
-    }
-  }
-
-  private loadData() {
+  private loadFromEnvironment() {
+    // Load from environment variables for Vercel compatibility
     try {
-      if (fs.existsSync(this.dataFile)) {
-        const data = JSON.parse(fs.readFileSync(this.dataFile, 'utf-8'));
+      if (process.env.STORAGE_DATA) {
+        const data = JSON.parse(process.env.STORAGE_DATA);
         
         this.configurations = new Map(data.configurations || []);
         this.emailCases = new Map(data.emailCases || []);
@@ -54,27 +43,26 @@ export class PersistentStorage {
         this.currentMsCredId = data.currentMsCredId || null;
       }
     } catch (error) {
-      console.error('Error loading data:', error);
+      console.error('Error loading from environment:', error);
     }
   }
 
-  private saveData() {
-    try {
-      const data = {
-        configurations: Array.from(this.configurations.entries()),
-        emailCases: Array.from(this.emailCases.entries()),
-        keywords: Array.from(this.keywords.entries()),
-        microsoftCredentials: Array.from(this.microsoftCredentials.entries()),
-        systemStatuses: Array.from(this.systemStatuses.entries()),
-        currentConfigId: this.currentConfigId,
-        currentStatusId: this.currentStatusId,
-        currentMsCredId: this.currentMsCredId
-      };
-      
-      fs.writeFileSync(this.dataFile, JSON.stringify(data, null, 2));
-    } catch (error) {
-      console.error('Error saving data:', error);
-    }
+  private saveToEnvironment() {
+    // For Vercel, we'll use in-memory storage since file system is not persistent
+    // In production, this would use Vercel KV or similar service
+    const data = {
+      configurations: Array.from(this.configurations.entries()),
+      emailCases: Array.from(this.emailCases.entries()),
+      keywords: Array.from(this.keywords.entries()),
+      microsoftCredentials: Array.from(this.microsoftCredentials.entries()),
+      systemStatuses: Array.from(this.systemStatuses.entries()),
+      currentConfigId: this.currentConfigId,
+      currentStatusId: this.currentStatusId,
+      currentMsCredId: this.currentMsCredId
+    };
+    
+    // Store in process.env for this session (not persistent across deployments)
+    process.env.STORAGE_DATA = JSON.stringify(data);
   }
 
   // Helper methods
@@ -99,7 +87,7 @@ export class PersistentStorage {
     
     this.configurations.set(id, newConfig);
     this.currentConfigId = id;
-    this.saveData();
+    this.saveToEnvironment();
     return newConfig;
   }
 
@@ -120,7 +108,7 @@ export class PersistentStorage {
     
     const updated = { ...existing, ...updates };
     this.configurations.set(this.currentConfigId, updated);
-    this.saveData();
+    this.saveToEnvironment();
     return updated;
   }
 
@@ -148,7 +136,7 @@ export class PersistentStorage {
     };
     
     this.emailCases.set(id, newCase);
-    this.saveData();
+    this.saveToEnvironment();
     return newCase;
   }
 
@@ -160,7 +148,7 @@ export class PersistentStorage {
     
     const updated = { ...existing, ...updates, updatedAt: new Date() };
     this.emailCases.set(id, updated);
-    this.saveData();
+    this.saveToEnvironment();
     return updated;
   }
 
@@ -196,7 +184,7 @@ export class PersistentStorage {
       };
       this.systemStatuses.set(id, { ...newStatus, ...status });
       this.currentStatusId = id;
-      this.saveData();
+      this.saveToEnvironment();
       return this.systemStatuses.get(id)!;
     }
     
@@ -207,7 +195,7 @@ export class PersistentStorage {
     
     const updated = { ...existing, ...status, lastUpdated: new Date() };
     this.systemStatuses.set(this.currentStatusId, updated);
-    this.saveData();
+    this.saveToEnvironment();
     return updated;
   }
 
@@ -226,13 +214,13 @@ export class PersistentStorage {
     };
     
     this.keywords.set(id, newKeyword);
-    this.saveData();
+    this.saveToEnvironment();
     return newKeyword;
   }
 
   async removeKeyword(id: string): Promise<void> {
     this.keywords.delete(id);
-    this.saveData();
+    this.saveToEnvironment();
   }
 
   async getActiveKeywords(): Promise<string[]> {
@@ -265,7 +253,7 @@ export class PersistentStorage {
     
     this.microsoftCredentials.set(id, newCredentials);
     this.currentMsCredId = id;
-    this.saveData();
+    this.saveToEnvironment();
     return newCredentials;
   }
 
@@ -281,7 +269,7 @@ export class PersistentStorage {
     
     const updated = { ...existing, ...credentials, updatedAt: new Date() };
     this.microsoftCredentials.set(this.currentMsCredId, updated);
-    this.saveData();
+    this.saveToEnvironment();
     return updated;
   }
 
@@ -289,9 +277,9 @@ export class PersistentStorage {
     if (this.currentMsCredId) {
       this.microsoftCredentials.delete(this.currentMsCredId);
       this.currentMsCredId = null;
-      this.saveData();
-    }
+      this.saveToEnvironment();
   }
+}
 }
 
 export const storage = new PersistentStorage();
